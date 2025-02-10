@@ -4,7 +4,7 @@ use std::str;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-#[derive(Ord, Eq, Debug)]
+#[derive(Eq, Debug)]
 pub struct Generation {
     number: usize,
     path: PathBuf,
@@ -19,7 +19,7 @@ impl Generation {
         let file_name = file_name.to_string_lossy();
         let tokens: Vec<_> = file_name.split('-').collect();
         if tokens.len() != 3 || tokens[0] != name|| tokens[2] != "link" {
-            return Err(format!("Cannot create generation representation"))
+            return Err("Cannot create generation representation".to_string())
         }
 
         let profile_path = dirent.path().parent().unwrap()
@@ -28,7 +28,7 @@ impl Generation {
         let number = str::parse::<usize>(tokens[1])
             .map_err(|_| format!("Cannot parse \"{}\" as generation number", tokens[1]))?;
 
-        let last_modified = fs::symlink_metadata(&dirent.path())
+        let last_modified = fs::symlink_metadata(dirent.path())
             .map_err(|e| format!("Unable to get metadata for path {} ({})", dirent.path().to_string_lossy(), e))?
             .modified()
             .map_err(|e| format!("Unable to get metadata for path {} ({})", dirent.path().to_string_lossy(), e))?;
@@ -71,8 +71,8 @@ impl Generation {
 
     pub fn remove(&self) -> Result<(), String> {
         let result = process::Command::new("nix-env")
-            .args(&["-p", self.profile_path().to_str().unwrap()])
-            .args(&["--delete-generations", &self.number().to_string()])
+            .args(["-p", self.profile_path().to_str().unwrap()])
+            .args(["--delete-generations", &self.number().to_string()])
             .stdin(process::Stdio::inherit())
             .stdout(process::Stdio::inherit())
             .stderr(process::Stdio::inherit())
@@ -89,9 +89,15 @@ impl Generation {
     }
 }
 
+impl Ord for Generation {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.number.cmp(&other.number)
+    }
+}
+
 impl PartialOrd for Generation {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.number.partial_cmp(&other.number)
+        Some(self.cmp(other))
     }
 }
 
@@ -106,8 +112,7 @@ pub fn user_generations(user: &str) -> Result<Vec<Generation>, String> {
         .map_err(|e| format!("Unable to read directory ({})", e))?
         .flatten()
         .filter(|e| e.file_name() != "profile")
-        .map(|e| Generation::new_from_direntry("profile", &e))
-        .flatten()
+        .flat_map(|e| Generation::new_from_direntry("profile", &e))
         .collect();
     generations.sort();
     Ok(generations)

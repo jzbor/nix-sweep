@@ -23,7 +23,7 @@ fn user() -> Result<String, String> {
         .map_err(|_| String::from("Unable to read $USER"))
 }
 
-fn mark(generations: &mut Vec<generations::Generation>, config: &config::Config) {
+fn mark(generations: &mut [generations::Generation], config: &config::Config) {
     // mark older generations
     for generation in generations.iter_mut() {
         if generation.age() > config.older {

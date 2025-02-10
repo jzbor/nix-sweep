@@ -12,7 +12,7 @@ pub fn gc() -> Result<(), String> {
         Ok(status) => if status.success() {
             Ok(())
         } else {
-            Err(format!("Garbage collection failed"))
+            Err("Garbage collection failed".to_string())
         },
         Err(e) => Err(format!("Garbage collection failed ({})", e)),
     }
