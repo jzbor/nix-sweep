@@ -1,6 +1,6 @@
 This project aims to provide a nicer interface for cleaning up Nix profiles:
 ```console
-$ nix-housekeeping --keep 20 --older 20 --list
+$ nix-sweep --keep 20 --older 20 --list
 => Listing profile generations for user jzbor
 [1288]  age: 29d        marked: remove
 [1289]  age: 29d        marked: remove
@@ -43,7 +43,7 @@ $ nix-housekeeping --keep 20 --older 20 --list
 [1326]  age: 12d        marked: keep
 [1327]  age: 12d        marked: keep
 
-$ nix-housekeeping --keep 20 --older 20
+$ nix-sweep --keep 20 --older 20
 => Removing old profile generations for user jzbor
 -> Removing generation 1288 (29 days old)
 removing profile version 1288

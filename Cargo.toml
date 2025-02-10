@@ -1,5 +1,5 @@
 [package]
-name = "nix-housekeeping"
+name = "nix-sweep"
 version = "0.1.0"
 edition = "2021"
 
