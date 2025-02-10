@@ -1,7 +1,8 @@
 use std::fs;
+use std::process;
 use std::str;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 #[derive(Ord, Eq, Debug)]
 pub struct Generation {
@@ -9,6 +10,7 @@ pub struct Generation {
     path: PathBuf,
     profile_path: PathBuf,
     age: u64,
+    marker: bool,
 }
 
 impl Generation {
@@ -39,15 +41,12 @@ impl Generation {
             number, age,
             path: dirent.path(),
             profile_path,
+            marker: false,
         })
     }
 
     pub fn number(&self) -> usize {
         self.number
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 
     pub fn profile_path(&self) -> &Path {
@@ -56,6 +55,37 @@ impl Generation {
 
     pub fn age(&self) -> u64 {
         self.age
+    }
+
+    pub fn mark(&mut self) {
+        self.marker = true;
+    }
+
+    pub fn unmark(&mut self) {
+        self.marker = false;
+    }
+
+    pub fn marked(&self) -> bool{
+        self.marker
+    }
+
+    pub fn remove(&self) -> Result<(), String> {
+        let result = process::Command::new("nix-env")
+            .args(&["-p", self.profile_path().to_str().unwrap()])
+            .args(&["--delete-generations", &self.number().to_string()])
+            .stdin(process::Stdio::inherit())
+            .stdout(process::Stdio::inherit())
+            .stderr(process::Stdio::inherit())
+            .status();
+
+        match result {
+            Ok(status) => if status.success() {
+                Ok(())
+            } else {
+                Err(format!("Removal of generation {} failed", self.number()))
+            },
+            Err(e) => Err(format!("Removal of generation {} failed ({})", self.number(), e)),
+        }
     }
 }
 

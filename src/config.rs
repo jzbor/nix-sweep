@@ -4,13 +4,13 @@ use clap::Parser;
 pub struct Config {
     /// Delete only generations older than <OLDER> days
     #[clap(short, long, default_value = "30")]
-    pub older: Option<usize>,
+    pub older: u64,
 
     /// Keep at least <KEEP> generations
     #[clap(short, long, default_value = "10")]
-    pub keep: Option<usize>,
+    pub keep: usize,
 
-    /// Only list generations with their age don't remove them
+    /// Only list generations with their age, don't remove them
     #[clap(long)]
     pub list: bool,
 
