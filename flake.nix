@@ -2,7 +2,7 @@
   description = "Cleanup old nix generations";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     cf.url = "github:jzbor/cornflakes";
   };

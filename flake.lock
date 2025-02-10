@@ -5,11 +5,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1739149336,
-        "narHash": "sha256-mYpElRWnKg6oT58E4tUvxvZGe/gJ+pC4vjL6OlevwcY=",
+        "lastModified": 1739211036,
+        "narHash": "sha256-71S/Co02YIm8r6dc740wmO3lj5I3zGHkYVLxOXc6VPM=",
         "owner": "jzbor",
         "repo": "cornflakes",
-        "rev": "eb3e500979f489aeee9f2c4b398c6fd14cb7e030",
+        "rev": "720b23be91760665d3a5823d1a8dea84944cd30b",
         "type": "github"
       },
       "original": {
