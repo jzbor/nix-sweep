@@ -57,11 +57,10 @@ fn main() {
         };
 
         for gen in generations {
-            let marker = if gen.marked() { "remove".red() } else { "keep".green() };
+            let marker = if gen.marked() { "would be removed".red() } else { "would be kept".green() };
             let id_str = format!("[{}]", gen.number()).yellow();
             let age_str = format!("{} {}d", "age:".bright_blue(), gen.age());
-            let marked_str = format!("{} {}", "marked:".bright_blue(), marker);
-            println!("{}\t{}\t{}", id_str, age_str, marked_str);
+            println!("{}\t{}\t{}", id_str, age_str, marker);
         }
         process::exit(0);
     }
@@ -70,7 +69,6 @@ fn main() {
         None => println!("{}", format!("=> Removing old system generations").green()),
         Some(user) => println!("{}", format!("=> Removing old profile generations for user {}", user).green()),
     };
-
     for gen in generations {
         if gen.marked() {
             println!("{}", format!("-> Removing generation {} ({} days old)", gen.number(), gen.age()).bright_blue());
