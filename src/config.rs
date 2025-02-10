@@ -17,4 +17,8 @@ pub struct Config {
     /// Run nix garbage collection afterwards
     #[clap(long)]
     pub gc: bool,
+
+    /// Apply to the system profile
+    #[clap(short, long)]
+    pub system: bool,
 }

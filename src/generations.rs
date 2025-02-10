@@ -108,11 +108,20 @@ impl PartialEq for Generation {
 }
 
 pub fn user_generations(user: &str) -> Result<Vec<Generation>, String> {
-    let mut generations: Vec<_> = fs::read_dir(format!("/nix/var/nix/profiles/per-user/{}", user))
+    generations(&format!("/nix/var/nix/profiles/per-user/{}", user), "profile")
+}
+
+pub fn system_generations() -> Result<Vec<Generation>, String> {
+    generations("/nix/var/nix/profiles/", "system")
+}
+
+fn generations(path: &str, profile_name: &str) -> Result<Vec<Generation>, String> {
+    let profile_prefix = format!("{}-", profile_name);
+    let mut generations: Vec<_> = fs::read_dir(path)
         .map_err(|e| format!("Unable to read directory ({})", e))?
         .flatten()
-        .filter(|e| e.file_name() != "profile")
-        .flat_map(|e| Generation::new_from_direntry("profile", &e))
+        .filter(|e| e.file_name().to_str().map(|n| n.starts_with(&profile_prefix)).unwrap_or(false))
+        .flat_map(|e| Generation::new_from_direntry(profile_name, &e))
         .collect();
     generations.sort();
     Ok(generations)

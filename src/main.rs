@@ -41,13 +41,21 @@ fn mark(generations: &mut [generations::Generation], config: &config::Config) {
 
 fn main() {
     let config = config::Config::parse();
-    let user = resolve(user());
 
-    let mut generations = resolve(generations::user_generations(&user));
+    let user = if config.system { None } else { Some(resolve(user())) };
+
+    let mut generations = match &user {
+        None => resolve(generations::system_generations()),
+        Some(user) => resolve(generations::user_generations(user)),
+    };
     mark(&mut generations, &config);
 
     if config.list {
-        println!("{}", format!("=> Listing profile generations for user {}", user).green());
+        match user {
+            None => println!("{}", format!("=> Listing system generations").green()),
+            Some(u) => println!("{}", format!("=> Listing profile generations for user {}", u).green()),
+        };
+
         for gen in generations {
             let marker = if gen.marked() { "remove".red() } else { "keep".green() };
             let id_str = format!("[{}]", gen.number()).yellow();
@@ -58,7 +66,11 @@ fn main() {
         process::exit(0);
     }
 
-    println!("{}", format!("=> Removing old profile generations for user {}", user).green());
+    match &user {
+        None => println!("{}", format!("=> Removing old system generations").green()),
+        Some(user) => println!("{}", format!("=> Removing old profile generations for user {}", user).green()),
+    };
+
     for gen in generations {
         if gen.marked() {
             println!("{}", format!("-> Removing generation {} ({} days old)", gen.number(), gen.age()).bright_blue());
