@@ -98,24 +98,27 @@ fn main() {
     };
     mark(&mut generations, &config);
 
-    if config.list || (!config.rm && !config.gc && !config.interactive) {
+    let interactive = config.interactive || (!config.list && !config.rm && !config.gc);
+
+    if config.list {
         // list generations
         list_generations(&generations, user.as_deref());
         process::exit(0);
     }
 
-    if config.rm || config.interactive {
-        if config.interactive {
-            list_generations(&generations, user.as_deref());
+    if interactive {
+        list_generations(&generations, user.as_deref());
+
+        println!();
+        let confirmation = resolve(ask("Do you want to proceed?"));
+        if !confirmation {
             println!();
-            let confirmation = resolve(ask("Do you want to proceed?"));
-            if !confirmation {
-                println!();
-                println!("-> Not touching anything");
-                process::exit(1);
-            }
+            println!("-> Not touching anything");
+            process::exit(1);
         }
 
+        remove_generations(&generations, user.as_deref());
+    } else if config.rm {
         remove_generations(&generations, user.as_deref());
     }
 
