@@ -60,7 +60,7 @@ fn ask(question: &str) -> Result<bool, String> {
 
 fn list_generations(generations: &[Generation], user: Option<&str>) {
     match user {
-        None => println!("{}", format!("=> Listing system generations").green()),
+        None => println!("{}", "=> Listing system generations".to_string().green()),
         Some(u) => println!("{}", format!("=> Listing profile generations for user {}", u).green()),
     };
 
@@ -73,7 +73,7 @@ fn list_generations(generations: &[Generation], user: Option<&str>) {
 
 fn remove_generations(generations: &[Generation], user: Option<&str>) {
     match &user {
-        None => println!("{}", format!("=> Removing old system generations").green()),
+        None => println!("{}", "=> Removing old system generations".to_string().green()),
         Some(user) => println!("{}", format!("=> Removing old profile generations for user {}", user).green()),
     };
 
@@ -98,7 +98,7 @@ fn main() {
     };
     mark(&mut generations, &config);
 
-    if config.list || (!config.list && !config.rm && !config.gc && !config.interactive) {
+    if config.list || (!config.rm && !config.gc && !config.interactive) {
         // list generations
         list_generations(&generations, user.as_deref());
         process::exit(0);
