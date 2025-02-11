@@ -98,7 +98,9 @@ fn main() {
     };
     mark(&mut generations, &config);
 
-    let interactive = config.interactive || (!config.list && !config.rm && !config.gc);
+    let no_action_given = !config.list && !config.rm && !config.gc && !config.interactive;
+    let interactive = config.interactive || no_action_given;
+    let gc = config.gc || no_action_given;
 
     if config.list {
         // list generations
@@ -122,7 +124,7 @@ fn main() {
         remove_generations(&generations, user.as_deref());
     }
 
-    if config.gc {
+    if gc {
         println!();
         println!("{}", "=> Running garbage collection".green());
         resolve(gc::gc());
