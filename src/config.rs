@@ -26,6 +26,10 @@ pub struct Config {
     #[clap(short, long, default_value = "10")]
     pub keep: usize,
 
+    /// Keep at most <MAX> generations
+    #[clap(short, long)]
+    pub max: Option<usize>,
+
     /// Apply to the system profile
     #[clap(short, long)]
     pub system: bool,

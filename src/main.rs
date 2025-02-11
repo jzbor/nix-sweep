@@ -33,6 +33,15 @@ fn mark(generations: &mut [generations::Generation], config: &config::Config) {
         }
     }
 
+    // limit to max generations
+    if let Some(max) = config.max {
+        for (i, generation) in generations.iter_mut().rev().enumerate() {
+            if i >= max {
+                generation.mark();
+            }
+        }
+    }
+
     // unmark kept generations
     for (i, generation) in generations.iter_mut().rev().enumerate() {
         if i < config.keep {
