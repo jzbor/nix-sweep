@@ -113,8 +113,8 @@ fn main() {
 
         println!();
         let confirmation = resolve(ask("Do you want to proceed?"));
+        println!();
         if !confirmation {
-            println!();
             println!("-> Not touching anything");
             process::exit(1);
         }
