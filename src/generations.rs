@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::process;
 use std::str;
@@ -107,8 +108,26 @@ impl PartialEq for Generation {
     }
 }
 
-pub fn user_generations(user: &str) -> Result<Vec<Generation>, String> {
-    generations(&format!("/nix/var/nix/profiles/per-user/{}", user), "profile")
+pub fn user_generations() -> Result<Vec<Generation>, String> {
+    let user = env::var("USER")
+        .map_err(|_| String::from("Unable to read $USER"))?;
+
+    let path = format!("/nix/var/nix/profiles/per-user/{}", user);
+    if fs::exists(&path)
+            .map_err(|e| format!("Unable to check path {} ({})", path, e))? {
+        return generations(&path, "profile");
+    }
+
+    let home = env::var("HOME")
+        .map_err(|_| String::from("Unable to read $USER"))?;
+
+    let path = format!("{}/.local/state/nix/profiles", home);
+    if fs::exists(&path)
+            .map_err(|e| format!("Unable to check path {} ({})", path, e))? {
+        return generations(&path, "profile");
+    }
+
+    Err("Could not find profile".to_owned())
 }
 
 pub fn system_generations() -> Result<Vec<Generation>, String> {
@@ -118,7 +137,7 @@ pub fn system_generations() -> Result<Vec<Generation>, String> {
 fn generations(path: &str, profile_name: &str) -> Result<Vec<Generation>, String> {
     let profile_prefix = format!("{}-", profile_name);
     let mut generations: Vec<_> = fs::read_dir(path)
-        .map_err(|e| format!("Unable to read directory ({})", e))?
+        .map_err(|e| format!("Unable to read directory {} ({})", path, e))?
         .flatten()
         .filter(|e| e.file_name().to_str().map(|n| n.starts_with(&profile_prefix)).unwrap_or(false))
         .flat_map(|e| Generation::new_from_direntry(profile_name, &e))

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use std::io::Write;
-use std::{env, process};
+use std::process;
 use colored::Colorize;
 
 use clap::Parser;
@@ -18,11 +18,6 @@ fn resolve<T, E: Display>(result: Result<T, E>) -> T {
             process::exit(1)
         },
     }
-}
-
-fn user() -> Result<String, String> {
-    env::var("USER")
-        .map_err(|_| String::from("Unable to read $USER"))
 }
 
 fn mark(generations: &mut [generations::Generation], config: &config::Config) {
@@ -67,10 +62,10 @@ fn ask(question: &str) -> Result<bool, String> {
     }
 }
 
-fn list_generations(generations: &[Generation], user: Option<&str>) {
+fn list_generations(generations: &[Generation], user: bool) {
     match user {
-        None => println!("{}", "=> Listing system generations".to_string().green()),
-        Some(u) => println!("{}", format!("=> Listing profile generations for user {}", u).green()),
+        true => println!("{}", "=> Listing system generations".to_string().green()),
+        false => println!("{}", "=> Listing user profile generations".to_string().green()),
     };
 
     for gen in generations {
@@ -80,10 +75,10 @@ fn list_generations(generations: &[Generation], user: Option<&str>) {
     }
 }
 
-fn remove_generations(generations: &[Generation], user: Option<&str>) {
-    match &user {
-        None => println!("{}", "=> Removing old system generations".to_string().green()),
-        Some(user) => println!("{}", format!("=> Removing old profile generations for user {}", user).green()),
+fn remove_generations(generations: &[Generation], user: bool) {
+    match user {
+        true => println!("{}", "=> Removing old system generations".to_string().green()),
+        false => println!("{}", "=> Removing old user profile generations".to_string().green()),
     };
 
     for gen in generations {
@@ -99,11 +94,11 @@ fn remove_generations(generations: &[Generation], user: Option<&str>) {
 fn main() {
     let config = config::Config::parse();
 
-    let user = if config.system { None } else { Some(resolve(user())) };
+    let user = !config.system;
 
-    let mut generations = match &user {
-        None => resolve(generations::system_generations()),
-        Some(user) => resolve(generations::user_generations(user)),
+    let mut generations = match user {
+        true => resolve(generations::system_generations()),
+        false => resolve(generations::user_generations()),
     };
     mark(&mut generations, &config);
 
@@ -113,12 +108,12 @@ fn main() {
 
     if config.list {
         // list generations
-        list_generations(&generations, user.as_deref());
+        list_generations(&generations, user);
         process::exit(0);
     }
 
     if interactive {
-        list_generations(&generations, user.as_deref());
+        list_generations(&generations, user);
 
         println!();
         let confirmation = resolve(ask("Do you want to proceed?"));
@@ -128,9 +123,9 @@ fn main() {
             process::exit(1);
         }
 
-        remove_generations(&generations, user.as_deref());
+        remove_generations(&generations, user);
     } else if config.rm {
-        remove_generations(&generations, user.as_deref());
+        remove_generations(&generations, user);
     }
 
     if gc {
