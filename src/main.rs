@@ -64,8 +64,8 @@ fn ask(question: &str) -> Result<bool, String> {
 
 fn list_generations(generations: &[Generation], user: bool) {
     match user {
-        true => println!("{}", "=> Listing system generations".to_string().green()),
-        false => println!("{}", "=> Listing user profile generations".to_string().green()),
+        true => println!("{}", "=> Listing user profile generations".to_string().green()),
+        false => println!("{}", "=> Listing system generations".to_string().green()),
     };
 
     for gen in generations {
@@ -77,8 +77,8 @@ fn list_generations(generations: &[Generation], user: bool) {
 
 fn remove_generations(generations: &[Generation], user: bool) {
     match user {
-        true => println!("{}", "=> Removing old system generations".to_string().green()),
-        false => println!("{}", "=> Removing old user profile generations".to_string().green()),
+        true => println!("{}", "=> Removing old user profile generations".to_string().green()),
+        false => println!("{}", "=> Removing old system generations".to_string().green()),
     };
 
     for gen in generations {
@@ -97,8 +97,8 @@ fn main() {
     let user = !config.system;
 
     let mut generations = match user {
-        true => resolve(generations::system_generations()),
-        false => resolve(generations::user_generations()),
+        true => resolve(generations::user_generations()),
+        false => resolve(generations::system_generations()),
     };
     mark(&mut generations, &config);
 
