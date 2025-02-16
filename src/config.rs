@@ -1,4 +1,5 @@
 use clap::Parser;
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Config {
@@ -33,4 +34,12 @@ pub struct Config {
     /// Apply to the system profile
     #[clap(short, long)]
     pub system: bool,
+
+    /// Apply to the default user profile
+    #[clap(short, long)]
+    pub user: bool,
+
+    /// Apply to the home-manager profile
+    #[clap(long)]
+    pub home: bool,
 }

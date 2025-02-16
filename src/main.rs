@@ -10,6 +10,13 @@ mod config;
 mod gc;
 mod generations;
 
+#[derive(Clone, Copy, Debug)]
+enum ProfileType {
+    User,
+    Home,
+    System,
+}
+
 fn resolve<T, E: Display>(result: Result<T, E>) -> T {
     match result {
         Ok(t) => t,
@@ -20,7 +27,7 @@ fn resolve<T, E: Display>(result: Result<T, E>) -> T {
     }
 }
 
-fn mark(generations: &mut [generations::Generation], config: &config::Config) {
+fn mark(mut generations: Vec<Generation>, config: &config::Config) -> Vec<Generation>{
     // mark older generations
     for generation in generations.iter_mut() {
         if generation.age() > config.older {
@@ -43,6 +50,8 @@ fn mark(generations: &mut [generations::Generation], config: &config::Config) {
             generation.unmark();
         }
     }
+
+    generations
 }
 
 fn ask(question: &str) -> Result<bool, String> {
@@ -62,45 +71,75 @@ fn ask(question: &str) -> Result<bool, String> {
     }
 }
 
-fn list_generations(generations: &[Generation], user: bool) {
-    match user {
-        true => println!("{}", "=> Listing user profile generations".to_string().green()),
-        false => println!("{}", "=> Listing system generations".to_string().green()),
-    };
+fn announce_listing(profile_type: ProfileType) {
+    use ProfileType::*;
+    match profile_type {
+        User => println!("{}", "=> Listing user profile generations".to_string().green()),
+        Home => println!("{}", "=> Listing home-manager generations".to_string().green()),
+        System => println!("{}", "=> Listing system generations".to_string().green()),
+    }
+}
 
+fn announce_removal(profile_type: ProfileType) {
+    use ProfileType::*;
+    match profile_type {
+        User => println!("{}", "=> Removing old user profile generations".to_string().green()),
+        Home => println!("{}", "=> Removing old home-manager generations".to_string().green()),
+        System => println!("{}", "=> Removing old system generations".to_string().green()),
+    }
+}
+
+fn list_generations(generations: &[Generation], profile_type: ProfileType) {
+    announce_listing(profile_type);
     for gen in generations {
         let marker = if gen.marked() { "would remove".red() } else { "would keep".green() };
         let id_str = format!("[{}]", gen.number()).yellow();
         println!("{}\t {} days old, {}", id_str, gen.age(), marker);
     }
+    println!();
 }
 
-fn remove_generations(generations: &[Generation], user: bool) {
-    match user {
-        true => println!("{}", "=> Removing old user profile generations".to_string().green()),
-        false => println!("{}", "=> Removing old system generations".to_string().green()),
-    };
-
+fn remove_generations(generations: &[Generation], profile_type: ProfileType) {
+    announce_removal(profile_type);
     for gen in generations {
+        let age_str = if gen.age() == 1 { "1 day old".to_owned() } else { format!("{} days old", gen.age()) };
         if gen.marked() {
-            println!("{}", format!("-> Removing generation {} ({} days old)", gen.number(), gen.age()).bright_blue());
+            println!("{}", format!("-> Removing generation {} ({})", gen.number(), age_str).bright_blue());
             resolve(gen.remove());
         } else {
-            println!("{}", format!("-> Keeping generation {} ({} days old)", gen.number(), gen.age()).bright_black());
+            println!("{}", format!("-> Keeping generation {} ({})", gen.number(), age_str).bright_black());
         }
     }
+    println!();
+}
+
+fn get_generations(profile_type: ProfileType, config: &config::Config) -> Result<Vec<Generation>, String> {
+    use ProfileType::*;
+    match profile_type {
+        Home => generations::home_generations(),
+        User => generations::user_generations(),
+        System => generations::system_generations(),
+    }.map(|gens| mark(gens, config))
 }
 
 fn main() {
     let config = config::Config::parse();
+    let mut profile_types = Vec::new();
 
-    let user = !config.system;
+    if config.home {
+        profile_types.push(ProfileType::Home);
+    }
+    if config.user {
+        profile_types.push(ProfileType::User);
+    }
+    if config.system {
+        profile_types.push(ProfileType::System);
+    }
+    if profile_types.is_empty() {
+        use ProfileType::*;
+        profile_types = vec![Home, User];
+    }
 
-    let mut generations = match user {
-        true => resolve(generations::user_generations()),
-        false => resolve(generations::system_generations()),
-    };
-    mark(&mut generations, &config);
 
     let no_action_given = !config.list && !config.rm && !config.gc && !config.interactive;
     let interactive = config.interactive || no_action_given;
@@ -108,24 +147,32 @@ fn main() {
 
     if config.list {
         // list generations
-        list_generations(&generations, user);
-        process::exit(0);
+        for profile_type in profile_types {
+            let generations = resolve(get_generations(profile_type, &config));
+            list_generations(&generations, profile_type);
+        }
+        return;
     }
 
     if interactive {
-        list_generations(&generations, user);
+        for profile_type in profile_types {
+            let generations = resolve(get_generations(profile_type, &config));
+            list_generations(&generations, profile_type);
 
-        println!();
-        let confirmation = resolve(ask("Do you want to proceed?"));
-        println!();
-        if !confirmation {
-            println!("-> Not touching anything");
-            process::exit(1);
+            let confirmation = resolve(ask("Do you want to proceed?"));
+            println!();
+            if !confirmation {
+                println!("-> Not touching anything");
+                process::exit(1);
+            }
+
+            remove_generations(&generations, profile_type);
         }
-
-        remove_generations(&generations, user);
     } else if config.rm {
-        remove_generations(&generations, user);
+        for profile_type in profile_types {
+            let generations = resolve(get_generations(profile_type, &config));
+            remove_generations(&generations, profile_type);
+        }
     }
 
     if gc {

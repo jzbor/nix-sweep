@@ -18,9 +18,11 @@ impl Generation {
     fn new_from_direntry(name: &str, dirent: &fs::DirEntry) -> Result<Self, String> {
         let file_name = dirent.file_name();
         let file_name = file_name.to_string_lossy();
-        let tokens: Vec<_> = file_name.split('-').collect();
-        if tokens.len() != 3 || tokens[0] != name|| tokens[2] != "link" {
-            return Err("Cannot create generation representation".to_string())
+        let suffix = file_name.strip_prefix(name)
+            .ok_or("Cannot create generation representation (missing profile prefix)")?;
+        let tokens: Vec<_> = suffix.split('-').collect();
+        if tokens.len() != 3 || tokens[2] != "link" {
+            return Err(format!("Cannot create generation representation ({:?})", tokens))
         }
 
         let profile_path = dirent.path().parent().unwrap()
@@ -109,22 +111,31 @@ impl PartialEq for Generation {
 }
 
 pub fn user_generations() -> Result<Vec<Generation>, String> {
+    named_user_generations("profile")
+}
+
+pub fn home_generations() -> Result<Vec<Generation>, String> {
+    named_user_generations("home-manager")
+}
+
+pub fn named_user_generations(profile_name: &str) -> Result<Vec<Generation>, String> {
+    let check_path = |path: &str| format!("{}/{}", path, profile_name);
     let user = env::var("USER")
         .map_err(|_| String::from("Unable to read $USER"))?;
 
     let path = format!("/nix/var/nix/profiles/per-user/{}", user);
-    if fs::exists(&path)
+    if fs::exists(&check_path(&path))
             .map_err(|e| format!("Unable to check path {} ({})", path, e))? {
-        return generations(&path, "profile");
+        return generations(&path, profile_name);
     }
 
     let home = env::var("HOME")
         .map_err(|_| String::from("Unable to read $USER"))?;
 
     let path = format!("{}/.local/state/nix/profiles", home);
-    if fs::exists(&path)
+    if fs::exists(&check_path(&path))
             .map_err(|e| format!("Unable to check path {} ({})", path, e))? {
-        return generations(&path, "profile");
+        return generations(&path, profile_name);
     }
 
     Err("Could not find profile".to_owned())
@@ -140,7 +151,8 @@ fn generations(path: &str, profile_name: &str) -> Result<Vec<Generation>, String
         .map_err(|e| format!("Unable to read directory {} ({})", path, e))?
         .flatten()
         .filter(|e| e.file_name().to_str().map(|n| n.starts_with(&profile_prefix)).unwrap_or(false))
-        .flat_map(|e| Generation::new_from_direntry(profile_name, &e))
+        .map(|e| Generation::new_from_direntry(profile_name, &e))
+        .map(|r| r.unwrap())
         .collect();
     generations.sort();
     Ok(generations)
