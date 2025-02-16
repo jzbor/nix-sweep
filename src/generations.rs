@@ -124,7 +124,7 @@ pub fn named_user_generations(profile_name: &str) -> Result<Vec<Generation>, Str
         .map_err(|_| String::from("Unable to read $USER"))?;
 
     let path = format!("/nix/var/nix/profiles/per-user/{}", user);
-    if fs::exists(&check_path(&path))
+    if fs::exists(check_path(&path))
             .map_err(|e| format!("Unable to check path {} ({})", path, e))? {
         return generations(&path, profile_name);
     }
@@ -133,7 +133,7 @@ pub fn named_user_generations(profile_name: &str) -> Result<Vec<Generation>, Str
         .map_err(|_| String::from("Unable to read $USER"))?;
 
     let path = format!("{}/.local/state/nix/profiles", home);
-    if fs::exists(&check_path(&path))
+    if fs::exists(check_path(&path))
             .map_err(|e| format!("Unable to check path {} ({})", path, e))? {
         return generations(&path, profile_name);
     }
