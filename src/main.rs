@@ -137,7 +137,7 @@ fn main() {
     }
     if profile_types.is_empty() {
         use ProfileType::*;
-        profile_types = vec![Home, User];
+        profile_types = vec![User];
     }
 
 
