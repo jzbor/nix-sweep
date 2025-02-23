@@ -1,6 +1,6 @@
 use clap::Parser;
 
-/// If no action (--list, --rm, --interactive, --gc) is given the program defaults to --interactive and --gc.
+/// If no action (--list, --rm, --interactive, --gc) is given the program defaults to --interactive.
 ///
 /// If no profile type (--home, --user, --system) is given the program defaults to --user.
 #[derive(Parser, Debug)]
