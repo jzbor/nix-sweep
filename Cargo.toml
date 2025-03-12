@@ -1,6 +1,6 @@
 [package]
 name = "nix-sweep"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Utility to clean up old Nix profile generations"
 license = "MIT"
