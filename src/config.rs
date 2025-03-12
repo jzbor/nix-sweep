@@ -37,7 +37,7 @@ pub struct Config {
     pub max: Option<usize>,
 
     /// Apply to the home-manager profile
-    #[clap(long)]
+    #[clap(short('H'), long)]
     pub home: bool,
 
     /// Apply to the default user profile
@@ -47,4 +47,8 @@ pub struct Config {
     /// Apply to the system profile
     #[clap(short, long)]
     pub system: bool,
+
+    /// Apply to a custom profile
+    #[clap(short('p'),long("profile"),id("PROFILE_PATH"))]
+    pub other_profiles: Vec<String>,
 }

@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::path::Component;
 use std::process;
 use std::str;
 use std::path::{Path, PathBuf};
@@ -139,6 +140,25 @@ pub fn named_user_generations(profile_name: &str) -> Result<Vec<Generation>, Str
     }
 
     Err("Could not find profile".to_owned())
+}
+
+pub fn generations_from_path(path: &Path) -> Result<Vec<Generation>, String> {
+    if fs::exists(path)
+        .map_err(|e| format!("Unable to check path {} ({})", path.to_string_lossy(), e))? {
+        let parent = path.parent()
+            .ok_or(format!("Unable to get parent for profile '{}'", path.to_string_lossy()))?
+            .to_str()
+            .ok_or(format!("Cannot convert profile path '{}' to string", path.to_string_lossy()))?
+            .to_owned();
+        let profile_name = match path.components().last() {
+            Some(Component::Normal(s)) => s.to_str()
+                .ok_or(format!("Cannot convert profile path '{}' to string", path.to_string_lossy()))?,
+            _ => return Err(format!("Unable to retrieve profile name for profile '{}'", path.to_string_lossy())),
+        };
+        generations(&parent, profile_name)
+    } else {
+        Err(format!("Could not find profile '{}'", path.to_string_lossy()))
+    }
 }
 
 pub fn system_generations() -> Result<Vec<Generation>, String> {
