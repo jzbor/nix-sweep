@@ -7,7 +7,7 @@
     cf.url = "github:jzbor/cornflakes";
   };
 
-  outputs = { self, nixpkgs, cf, crane, ... }: (cf.mkLib nixpkgs).flakeForDefaultSystems (system:
+  outputs = { self, nixpkgs, cf, crane, ... }: ((cf.mkLib nixpkgs).flakeForDefaultSystems (system:
   let
     pkgs = nixpkgs.legacyPackages.${system};
     craneLib = crane.mkLib pkgs;
@@ -23,7 +23,7 @@
       # Additional tools
       nativeBuildInputs = [];
     };
-
+  })) // {
     nixosModules.default = { lib, config, pkgs, ...}: let
       cfg = config.services.nix-sweep;
     in {
@@ -61,5 +61,5 @@
         };
       };
     };
-  });
+  };
 }
