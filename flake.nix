@@ -24,7 +24,8 @@
       nativeBuildInputs = [];
     };
   })) // {
-    nixosModules.default = { lib, config, pkgs, ...}: let
+    nixosModules.default = { lib, config, pkgs, ...}:
+    let
       cfg = config.services.nix-sweep;
     in {
       options.services.nix-sweep = {
@@ -36,10 +37,40 @@
           description = "nix-sweep package to use for the service";
         };
 
+        nixPackage = lib.mkOption {
+          type = lib.types.package;
+          default = pkgs.nix;
+          description = "Nix package used to actually remove generations";
+        };
+
         interval = lib.mkOption {
           type = lib.types.str;
           default = "daily";
           description = "How often to run nix-sweep (see systemd.time(7) for the format).";
+        };
+
+        older = lib.mkOption {
+          type = lib.types.int;
+          default = 30;
+          description = "Delete generations older than <OLDER> days";
+        };
+
+        keep = lib.mkOption {
+          type = lib.types.int;
+          default = 10;
+          description = "Keep at least <KEEP> generations";
+        };
+
+        max = lib.mkOption {
+          type = lib.types.nullOr lib.types.int;
+          default = null;
+          description = "Keep at most <MAX> generations";
+        };
+
+        gc = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Run nix garbage collection afterwards";
         };
       };
 
@@ -53,7 +84,16 @@
         };
 
         systemd.services.nix-sweep = {
-          script = "${cfg.package}/bin/nix-sweep --rm --system";
+          path = [ cfg.nixPackage ];
+          script = lib.strings.concatStringsSep " " ([
+            "${cfg.package}/bin/nix-sweep"
+            "--rm"
+            "--system"
+            "--older" (toString cfg.older)
+            "--keep" (toString cfg.keep)
+          ] ++ (if isNull cfg.max then [] else [ "--max" (toString cfg.max) ])
+            ++ (if cfg.gc then [ "--gc" ] else [])
+          );
           serviceConfig = {
             Type = "oneshot";
             User = "root";
