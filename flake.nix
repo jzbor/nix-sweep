@@ -12,9 +12,19 @@
     pkgs = nixpkgs.legacyPackages.${system};
     craneLib = crane.mkLib pkgs;
   in {
-    packages.default = craneLib.buildPackage {
+    packages.default = craneLib.buildPackage rec {
       src = craneLib.cleanCargoSource ./.;
       strictDeps = true;
+
+      cargoArtifacts = craneLib.buildDepsOnly {
+        inherit src strictDeps;
+      };
+
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postFixup = ''
+        wrapProgram $out/bin/nix-sweep \
+          --set PATH ${pkgs.lib.makeBinPath [ pkgs.nix ]}
+      '';
     };
 
     devShells.default = craneLib.devShell {
@@ -28,19 +38,13 @@
     let
       cfg = config.services.nix-sweep;
     in {
-      options.services.nix-sweep = {
+      options.services.nix-sweep = rec {
         enable = lib.mkEnableOption "Enable nix-sweep";
 
         package = lib.mkOption {
           type = lib.types.package;
           inherit (self.packages.${pkgs.system}) default;
           description = "nix-sweep package to use for the service";
-        };
-
-        nixPackage = lib.mkOption {
-          type = lib.types.package;
-          default = pkgs.nix;
-          description = "Nix package used to actually remove generations";
         };
 
         interval = lib.mkOption {
@@ -72,31 +76,53 @@
           default = false;
           description = "Run nix garbage collection afterwards";
         };
+
+        gcInterval = lib.mkOption {
+          type = lib.types.str;
+          inherit (interval) default;
+          description = "How often to run garbage collection via nix-sweep (see systemd.time(7) for the format).";
+        };
       };
 
       config = lib.mkIf cfg.enable {
-        systemd.timers."nix-sweep" = {
-          wantedBy = [ "timers.target" ];
-          timerConfig = {
-            OnCalendar = cfg.interval;
-            Unit = "nix-sweep.service";
+        systemd = {
+          timers."nix-sweep" = {
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnCalendar = cfg.interval;
+              Unit = "nix-sweep.service";
+            };
           };
-        };
 
-        systemd.services.nix-sweep = {
-          path = [ cfg.nixPackage ];
-          script = lib.strings.concatStringsSep " " ([
-            "${cfg.package}/bin/nix-sweep"
-            "--rm"
-            "--system"
-            "--older" (toString cfg.older)
-            "--keep" (toString cfg.keep)
-          ] ++ (if cfg.max == null then [] else [ "--max" (toString cfg.max) ])
-            ++ (if cfg.gc then [ "--gc" ] else [])
-          );
-          serviceConfig = {
-            Type = "oneshot";
-            User = "root";
+          services."nix-sweep" = {
+            script = lib.strings.concatStringsSep " " ([
+              "${cfg.package}/bin/nix-sweep"
+              "--rm" "--system"
+              "--older" (toString cfg.older)
+              "--keep" (toString cfg.keep)
+            ] ++ (if cfg.max == null then [] else [ "--max" (toString cfg.max) ])
+              ++ (if cfg.gc && cfg.gcInterval == cfg.interval then [ "--gc" ] else [])
+            );
+            serviceConfig = {
+              Type = "oneshot";
+              User = "root";
+            };
+          };
+
+          timers."nix-sweep-gc" = lib.mkIf (cfg.gc && cfg.gcInterval != cfg.interval) {
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnCalendar = cfg.interval;
+              Unit = "nix-sweep-gc.service";
+            };
+          };
+
+          services."nix-sweep-gc" = lib.mkIf (cfg.gc && cfg.gcInterval != cfg.interval) {
+            script = "${cfg.package}/bin/nix-sweep --gc";
+            serviceConfig = {
+              Type = "oneshot";
+              User = "root";
+            };
           };
         };
       };
