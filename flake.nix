@@ -33,7 +33,7 @@
 
         package = lib.mkOption {
           type = lib.types.package;
-          default = self.packages.${pkgs.system}.default;
+          inherit (self.packages.${pkgs.system}) default;
           description = "nix-sweep package to use for the service";
         };
 
@@ -91,7 +91,7 @@
             "--system"
             "--older" (toString cfg.older)
             "--keep" (toString cfg.keep)
-          ] ++ (if isNull cfg.max then [] else [ "--max" (toString cfg.max) ])
+          ] ++ (if cfg.max == null then [] else [ "--max" (toString cfg.max) ])
             ++ (if cfg.gc then [ "--gc" ] else [])
           );
           serviceConfig = {
