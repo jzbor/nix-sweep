@@ -5,7 +5,7 @@ use clap::Parser;
 /// If no profile type (--home, --user, --system) is given the program defaults to --user.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about)]
-pub struct Config {
+pub struct Args {
     /// Only list generations with their age, don't remove them
     #[clap(long)]
     pub list: bool,

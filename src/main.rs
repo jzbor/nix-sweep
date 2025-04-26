@@ -28,7 +28,7 @@ fn resolve<T, E: Display>(result: Result<T, E>) -> T {
     }
 }
 
-fn mark(mut generations: Vec<Generation>, config: &config::Config) -> Vec<Generation>{
+fn mark(mut generations: Vec<Generation>, config: &config::Args) -> Vec<Generation>{
     // mark older generations
     for generation in generations.iter_mut() {
         if generation.age() > config.older {
@@ -116,7 +116,7 @@ fn remove_generations(generations: &[Generation], profile_type: &ProfileType) {
     println!();
 }
 
-fn get_generations(profile_type: &ProfileType, config: &config::Config) -> Result<Vec<Generation>, String> {
+fn get_generations(profile_type: &ProfileType, config: &config::Args) -> Result<Vec<Generation>, String> {
     use ProfileType::*;
     match profile_type {
         Home() => generations::home_generations(),
@@ -127,7 +127,7 @@ fn get_generations(profile_type: &ProfileType, config: &config::Config) -> Resul
 }
 
 fn main() {
-    let config = config::Config::parse();
+    let config = config::Args::parse();
     let mut profile_types = Vec::new();
 
     if config.home {
