@@ -1,16 +1,21 @@
 use std::fmt::Display;
 use std::io::Write;
+use std::path::PathBuf;
 use std::str::FromStr;
-use std::{path, process};
+use std::{fs, path, process};
 use colored::Colorize;
 
 use clap::Parser;
 use config::ConfigPreset;
 use generations::Generation;
+use roots::{gc_root_is_current, gc_root_is_profile};
+use store_paths::StorePath;
 
 mod config;
 mod gc;
 mod generations;
+mod store_paths;
+mod roots;
 
 
 #[derive(Clone, Debug)]
@@ -31,38 +36,86 @@ pub struct Args {
 #[derive(Clone, Debug, clap::Subcommand)]
 enum Subcommand {
     /// Clean out old profiles
-    Cleanout {
-        /// Settings for clean out criteria
-        #[clap(short, long, default_value_t = config::DEFAULT_PRESET.to_owned())]
-        preset: String,
+    Cleanout(CleanoutArgs),
 
-        /// Alternative config file
-        #[clap(short('C'), long)]
-        config: Option<path::PathBuf>,
-
-        #[clap(flatten)]
-        cleanout_config: config::ConfigPreset,
-
-        /// List, but do not actually delete old generations
-        #[clap(short, long)]
-        dry_run: bool,
-
-        /// Profiles to clean out; valid values: system, user, home, <path>
-        profiles: Vec<String>,
-    },
+    /// Selectively remove GC roots
+    TidyupGCRoots(TidyupGCRootsArgs),
 
     /// Run garbage collection (short for `nix-store --gc`)
-    GC {
-        /// Ask before running garbage collection
-        #[clap(short, long)]
-        interactive: bool,
+    GC(GCArgs),
 
-        /// Don't actually run garbage collection
-        #[clap(short, long)]
-        dry_run: bool,
-    }
+    GCRoots(GCRootsArgs),
 }
 
+#[derive(Clone, Debug, clap::Args)]
+struct CleanoutArgs {
+    /// Settings for clean out criteria
+    #[clap(short, long, default_value_t = config::DEFAULT_PRESET.to_owned())]
+    preset: String,
+
+    /// Alternative config file
+    #[clap(short('C'), long)]
+    config: Option<path::PathBuf>,
+
+    #[clap(flatten)]
+    cleanout_config: config::ConfigPreset,
+
+    /// List, but do not actually delete old generations
+    #[clap(short, long)]
+    dry_run: bool,
+
+    /// Profiles to clean out; valid values: system, user, home, <path>
+    profiles: Vec<String>,
+}
+
+#[derive(Clone, Debug, clap::Args)]
+struct GCArgs {
+    /// Ask before running garbage collection
+    #[clap(short, long)]
+    interactive: bool,
+
+    /// Don't actually run garbage collection
+    #[clap(short, long)]
+    dry_run: bool,
+}
+
+#[derive(Clone, Debug, clap::Args)]
+struct GCRootsArgs {
+    /// Only print the paths
+    #[clap(long)]
+    paths: bool,
+
+    /// Present list as tsv
+    #[clap(long)]
+    tsv: bool,
+
+    /// Include profiles
+    #[clap(short('p'), long)]
+    include_profiles: bool,
+
+    /// Include current
+    #[clap(short('c'), long)]
+    include_current: bool,
+
+    /// Include gc roots that are referenced, but could not be found
+    #[clap(long)]
+    include_missing: bool,
+}
+
+#[derive(Clone, Debug, clap::Args)]
+struct TidyupGCRootsArgs {
+    /// Include profiles
+    #[clap(short('p'), long)]
+    include_profiles: bool,
+
+    /// Include current
+    #[clap(short('c'), long)]
+    include_current: bool,
+
+    /// Include gc roots that are referenced, but could not be found
+    #[clap(long)]
+    include_missing: bool,
+}
 
 impl FromStr for ProfileType {
     type Err = String;
@@ -135,20 +188,40 @@ fn mark(mut generations: Vec<Generation>, config: &config::ConfigPreset) -> Vec<
     generations
 }
 
-fn ask(question: &str) -> Result<bool, String> {
+fn ask(question: &str, default: bool) -> bool {
     loop {
-        print!("{} [y/n] ",question);
+        match default {
+            true => print!("{} [Y/n] ",question),
+            false => print!("{} [y/N] ",question),
+        }
         let _ = std::io::stdout().flush();
 
         let mut input = String::new();
-        std::io::stdin().read_line(&mut input)
-            .map_err(|e| format!("Unable to ask question ({})", e))?;
+        match std::io::stdin().read_line(&mut input) {
+            Ok(_) => (),
+            Err(_) => continue,
+        };
 
         match input.trim() {
-            "y" | "Y" | "yes" | "Yes" | "YES" => return Ok(true),
-            "n" | "N" | "no" | "No" | "NO" => return Ok(false),
+            "y" | "Y" | "yes" | "Yes" | "YES" => return true,
+            "n" | "N" | "no" | "No" | "NO" => return false,
+            "" => return default,
             _ => continue,
         }
+    }
+}
+
+fn ack(question: &str) {
+    loop {
+        print!("{} [enter] ",question);
+        let _ = std::io::stdout().flush();
+
+        let mut input = String::new();
+        match std::io::stdin().read_line(&mut input) {
+            Ok(_) => (),
+            Err(_) => continue,
+        };
+        return;
     }
 }
 
@@ -206,12 +279,12 @@ fn get_generations(profile_type: &ProfileType, config: &config::ConfigPreset) ->
     }.map(|gens| mark(gens, config))
 }
 
-fn run_gc(interactive: bool, dry_run: bool) -> Result<(), String> {
-    if dry_run {
+fn run_gc(args: GCArgs) -> Result<(), String> {
+    if args.dry_run {
         println!("\n{}", "=> Skipping garbage collection (dry run)".green());
     } else {
         println!("\n{}", "=> Running garbage collection".green());
-        if !interactive || ask("Do you want to perform garbage collection now?")? {
+        if !args.interactive || ask("Do you want to perform garbage collection now?", false) {
             gc::gc()?
         }
     }
@@ -219,24 +292,24 @@ fn run_gc(interactive: bool, dry_run: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn cleanout(preset: String, config_file: Option<path::PathBuf>, config_args: config::ConfigPreset, profiles: Vec<String>, dry_run: bool) -> Result<(), String> {
-    config_args.validate()?;
-    let config = ConfigPreset::load(&preset, config_file)?
-        .override_with(&config_args);
+fn cleanout(args: CleanoutArgs) -> Result<(), String> {
+    args.cleanout_config.validate()?;
+    let config = ConfigPreset::load(&args.preset, args.config)?
+        .override_with(&args.cleanout_config);
     let interactive = config.interactive.is_none() || config.interactive == Some(true);
 
     // println!("{:#?}", config);
 
-    for profile_str in profiles {
+    for profile_str in args.profiles {
         let profile = ProfileType::from_str(&profile_str)?;
         let generations = get_generations(&profile, &config)?;
 
-        if dry_run {
+        if args.dry_run {
             list_generations(&generations, &profile);
         } else if interactive {
             list_generations(&generations, &profile);
 
-            let confirmation = ask("Do you want to proceed?")?;
+            let confirmation = ask("Do you want to proceed?", false);
             if confirmation {
             remove_generations(&generations, &profile);
             } else {
@@ -248,7 +321,83 @@ fn cleanout(preset: String, config_file: Option<path::PathBuf>, config_args: con
     }
 
     if config.gc == Some(true) {
-        run_gc(interactive, dry_run)?;
+        let gc_args = GCArgs { interactive, dry_run: args.dry_run };
+        run_gc(gc_args)?;
+    }
+
+    Ok(())
+}
+
+fn fancy_print_gc_root(link: &PathBuf, store_path_result: &Result<StorePath, String>) {
+    let is_profile = gc_root_is_profile(link);
+    let is_current = gc_root_is_current(link);
+    let attributes = match (is_profile, is_current) {
+        (true, true) => "(profile, current)",
+        (true, false) => "(profile)",
+        (false, true) => "(current)",
+        (false, false) => "",
+    };
+
+    if let Ok(store_path) = store_path_result {
+        let size = format!("[{}]", size::Size::from_bytes(store_path.closure_size())).yellow();
+        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
+    } else {
+        let size = "[???]".yellow();
+        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("{}", format!("  -> <not accessible>").bright_black());
+    }
+
+}
+
+fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
+    let roots = roots::gc_roots(args.include_missing)?;
+
+    for (link, result) in roots {
+        if !args.include_profiles && gc_root_is_profile(&link) {
+            continue
+        }
+        if !args.include_current && gc_root_is_current(&link) {
+            continue
+        }
+
+        if args.paths {
+            println!("{}", link.to_string_lossy());
+        } else if args.tsv {
+            let path = result.as_ref().map(|p| p.path().to_string_lossy().to_string())
+                .unwrap_or(String::from("na"));
+            println!("{}\t{}", link.to_string_lossy(), path);
+        } else {
+            fancy_print_gc_root(&link, &result);
+            println!()
+        }
+    }
+
+    Ok(())
+}
+
+fn tidyup_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
+    let roots = roots::gc_roots(args.include_missing)?;
+
+    for (link, result) in roots {
+        if !args.include_profiles && gc_root_is_profile(&link) {
+            continue
+        }
+        if !args.include_current && gc_root_is_current(&link) {
+            continue
+        }
+
+        fancy_print_gc_root(&link, &result);
+
+        if result.is_err() {
+            ack("Cannot remove as the path is inaccessible");
+        } else if ask(&format!("Remove gc root?"), false) {
+            match fs::remove_file(&link) {
+                Ok(_) => println!("Successfully removed gc root '{}'", link.to_string_lossy()),
+                Err(e) => println!("{}", format!("Error: {}", e.to_string()).red()),
+            }
+        }
+        println!();
     }
 
     Ok(())
@@ -259,8 +408,10 @@ fn main() {
 
     use Subcommand::*;
     let res = match config.subcommand {
-        Cleanout { preset, config, cleanout_config, profiles, dry_run } => cleanout(preset, config, cleanout_config, profiles, dry_run),
-        GC { interactive, dry_run } => run_gc(interactive, dry_run),
+        Cleanout(args) => cleanout(args),
+        GC(args) => run_gc(args),
+        GCRoots(args) => list_gc_roots(args),
+        TidyupGCRoots(args) => tidyup_gc_roots(args),
     };
     resolve(res);
 }
