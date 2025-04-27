@@ -35,8 +35,12 @@ pub struct ConfigPreset {
     pub remove_older: Option<u64>,
 
     /// Ask before removing generations or running garbage collection
-    #[clap(short, long)]
+    #[clap(short, long, action = clap::ArgAction::SetTrue, overrides_with = "_non_interactive")]
     pub interactive: Option<bool>,
+
+    /// Do not ask before running garbage collection
+    #[clap(short, long, action = clap::ArgAction::SetTrue)]
+    _non_interactive: Option<bool>,
 
     /// Run GC afterwards
     #[clap(long)]
@@ -192,7 +196,7 @@ impl ConfigPreset {
             }
         }
 
-        ConfigPreset { keep_min, keep_max, keep_newer, remove_older, interactive, gc }
+        ConfigPreset { keep_min, keep_max, keep_newer, remove_older, interactive, gc, _non_interactive: None }
     }
 
     pub fn override_with_opt(&self, other: Option<&ConfigPreset>) -> Self {
@@ -210,6 +214,7 @@ impl ConfigPreset {
             keep_newer: if let Some(0) = self.keep_newer { None } else { self.keep_newer },
             remove_older: if let Some(0) = self.remove_older { None } else { self.remove_older },
             interactive: self.interactive,
+            _non_interactive: None,
             gc: self.gc,
         }
     }
@@ -223,6 +228,7 @@ impl Default for ConfigPreset {
             keep_newer: None,
             remove_older: None,
             interactive: None,
+            _non_interactive: None,
             gc: None,
         }
     }

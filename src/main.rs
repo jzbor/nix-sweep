@@ -38,12 +38,13 @@ enum Subcommand {
     /// Clean out old profiles
     Cleanout(CleanoutArgs),
 
-    /// Selectively remove GC roots
+    /// Selectively remove gc roots
     TidyupGCRoots(TidyupGCRootsArgs),
 
     /// Run garbage collection (short for `nix-store --gc`)
     GC(GCArgs),
 
+    /// Print out gc roots
     GCRoots(GCRootsArgs),
 }
 
@@ -71,8 +72,12 @@ struct CleanoutArgs {
 #[derive(Clone, Debug, clap::Args)]
 struct GCArgs {
     /// Ask before running garbage collection
-    #[clap(short, long)]
+    #[clap(short, long, overrides_with = "_non_interactive")]
     interactive: bool,
+
+    /// Do not ask before running garbage collection
+    #[clap(short, long)]
+    _non_interactive: bool,
 
     /// Don't actually run garbage collection
     #[clap(short, long)]
@@ -321,7 +326,7 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
     }
 
     if config.gc == Some(true) {
-        let gc_args = GCArgs { interactive, dry_run: args.dry_run };
+        let gc_args = GCArgs { interactive, _non_interactive: !interactive, dry_run: args.dry_run };
         run_gc(gc_args)?;
     }
 
