@@ -97,38 +97,16 @@ impl ConfigPreset {
             None => None,
         };
 
-        let system_default_preset = system_config.as_ref()
-            .and_then(|c| c.get_preset(DEFAULT_PRESET));
-        let user_default_preset = user_config.as_ref()
-            .and_then(|c| c.get_preset(DEFAULT_PRESET));
-        let custom_default_preset = custom_config.as_ref()
-            .and_then(|c| c.get_preset(DEFAULT_PRESET));
-
-        let system_named_preset = if preset_name != DEFAULT_PRESET {
-            system_config.as_ref()
-                .and_then(|c| c.get_preset(preset_name))
-        } else {
-            None
-        };
-        let user_named_preset = if preset_name != DEFAULT_PRESET {
-            user_config.as_ref()
-                .and_then(|c| c.get_preset(preset_name))
-        } else {
-            None
-        };
-        let custom_named_preset = if preset_name != DEFAULT_PRESET {
-            custom_config.as_ref()
-                .and_then(|c| c.get_preset(preset_name))
-        } else {
-            None
-        };
+        let system_named_preset = system_config.as_ref()
+            .and_then(|c| c.get_preset(preset_name));
+        let user_named_preset = user_config.as_ref()
+            .and_then(|c| c.get_preset(preset_name));
+        let custom_named_preset = custom_config.as_ref()
+            .and_then(|c| c.get_preset(preset_name));
 
         let preset = Self::default()
-            .override_with_opt(system_default_preset)
             .override_with_opt(system_named_preset)
-            .override_with_opt(user_default_preset)
             .override_with_opt(user_named_preset)
-            .override_with_opt(custom_default_preset)
             .override_with_opt(custom_named_preset)
             .finalize();
 
