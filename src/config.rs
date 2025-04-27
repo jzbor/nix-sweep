@@ -43,7 +43,7 @@ pub struct ConfigPreset {
     _non_interactive: Option<bool>,
 
     /// Run GC afterwards
-    #[clap(long)]
+    #[clap(long, action = clap::ArgAction::SetTrue)]
     pub gc: Option<bool>,
 }
 

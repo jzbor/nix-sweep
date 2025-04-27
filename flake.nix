@@ -53,22 +53,28 @@
           description = "How often to run nix-sweep (see systemd.time(7) for the format).";
         };
 
-        older = lib.mkOption {
-          type = lib.types.int;
+        keepNewer = lib.mkOption {
+          type = lib.types.nullOr lib.types.int;
+          default = 7;
+          description = "Keep generations newer than <NEWER> days";
+        };
+
+        removeOlder = lib.mkOption {
+          type = lib.types.nullOr lib.types.int;
           default = 30;
           description = "Delete generations older than <OLDER> days";
         };
 
-        keep = lib.mkOption {
-          type = lib.types.int;
+        keepMin = lib.mkOption {
+          type = lib.types.nullOr lib.types.int;
           default = 10;
-          description = "Keep at least <KEEP> generations";
+          description = "Keep at least <KEEP_MIN> generations";
         };
 
-        max = lib.mkOption {
+        keepMax = lib.mkOption {
           type = lib.types.nullOr lib.types.int;
           default = null;
-          description = "Keep at most <MAX> generations";
+          description = "Keep at most <KEEP_MAX> generations";
         };
 
         gc = lib.mkOption {
@@ -97,11 +103,14 @@
           services."nix-sweep" = {
             script = lib.strings.concatStringsSep " " ([
               "${cfg.package}/bin/nix-sweep"
-              "--rm" "--system"
-              "--older" (toString cfg.older)
-              "--keep" (toString cfg.keep)
-            ] ++ (if cfg.max == null then [] else [ "--max" (toString cfg.max) ])
-              ++ (if cfg.gc && cfg.gcInterval == cfg.interval then [ "--gc" ] else [])
+              "cleanout"
+              "--non-interactive"
+            ] ++ (if cfg.gc && cfg.gcInterval == cfg.interval then [ "--gc" ] else [])
+              ++ (if cfg.keepMin == null then [] else [ "--keep-min" (toString cfg.keepMin) ])
+              ++ (if cfg.keepMax == null then [] else [ "--keep-max" (toString cfg.keepMax) ])
+              ++ (if cfg.keepNewer == null then [] else [ "--keep-newer" (toString cfg.keepNewer) ])
+              ++ (if cfg.removeOlder == null then [] else [ "--removeOlder" (toString cfg.removeOlder) ])
+              ++ [ "system" ]
             );
             serviceConfig = {
               Type = "oneshot";
@@ -118,7 +127,7 @@
           };
 
           services."nix-sweep-gc" = lib.mkIf (cfg.gc && cfg.gcInterval != cfg.interval) {
-            script = "${cfg.package}/bin/nix-sweep --gc";
+            script = "${cfg.package}/bin/nix-sweep gc";
             serviceConfig = {
               Type = "oneshot";
               User = "root";
