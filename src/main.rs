@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::Path;
 use std::str::FromStr;
 use std::{fs, path, process};
 use colored::Colorize;
@@ -333,7 +333,7 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn fancy_print_gc_root(link: &PathBuf, store_path_result: &Result<StorePath, String>) {
+fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>) {
     let is_profile = gc_root_is_profile(link);
     let is_current = gc_root_is_current(link);
     let attributes = match (is_profile, is_current) {
@@ -350,7 +350,7 @@ fn fancy_print_gc_root(link: &PathBuf, store_path_result: &Result<StorePath, Str
     } else {
         let size = "[???]".yellow();
         println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
-        println!("{}", format!("  -> <not accessible>").bright_black());
+        println!("{}", "  -> <not accessible>".to_string().bright_black());
     }
 
 }
@@ -396,10 +396,10 @@ fn tidyup_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
 
         if result.is_err() {
             ack("Cannot remove as the path is inaccessible");
-        } else if ask(&format!("Remove gc root?"), false) {
+        } else if ask("Remove gc root?", false) {
             match fs::remove_file(&link) {
                 Ok(_) => println!("Successfully removed gc root '{}'", link.to_string_lossy()),
-                Err(e) => println!("{}", format!("Error: {}", e.to_string()).red()),
+                Err(e) => println!("{}", format!("Error: {}", e).red()),
             }
         }
         println!();
