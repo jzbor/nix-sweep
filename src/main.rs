@@ -72,11 +72,11 @@ struct CleanoutArgs {
 #[derive(Clone, Debug, clap::Args)]
 struct GCArgs {
     /// Ask before running garbage collection
-    #[clap(short, long, overrides_with = "_non_interactive")]
+    #[clap(short('n'), long("non-interactive"), action = clap::ArgAction::SetFalse)]  // this is very confusing, but works
     interactive: bool,
 
     /// Do not ask before running garbage collection
-    #[clap(short, long)]
+    #[clap(short('i'), long("interactive"), overrides_with = "interactive")]
     _non_interactive: bool,
 
     /// Don't actually run garbage collection
