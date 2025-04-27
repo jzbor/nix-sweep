@@ -1,54 +1,251 @@
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use std::str::FromStr;
+
 use clap::Parser;
+use serde::Deserialize;
 
-/// If no action (--list, --rm, --interactive, --gc) is given the program defaults to --interactive.
-///
-/// If no profile type (--home, --user, --system) is given the program defaults to --user.
-#[derive(Parser, Debug)]
-#[command(version, about, long_about)]
-pub struct Args {
-    /// Only list generations with their age, don't remove them
+
+const SYSTEM_CONFIG: &str = "/etc/nix-sweep/config.toml";
+const APP_PREFIX: &str = "nix-sweep";
+const CONFIG_FILENAME: &str = "config.toml";
+pub const DEFAULT_PRESET: &str = "default";
+
+
+#[derive(Debug, Deserialize)]
+pub struct ConfigFile(HashMap<String, ConfigPreset>);
+
+#[derive(Clone, Debug, Deserialize, Parser)]
+pub struct ConfigPreset {
+    /// Keep at least this many generations
     #[clap(long)]
-    pub list: bool,
+    pub keep_min: Option<usize>,
 
-    /// Remove generations
+    /// Keep at most this many generations
     #[clap(long)]
-    pub rm: bool,
+    pub keep_max: Option<usize>,
 
-    /// Ask for confirmation before starting removal
-    #[clap(short, long)]
-    pub interactive: bool,
-
-    /// Run nix garbage collection afterwards
+    /// Keep all generations newer than this many days
     #[clap(long)]
-    pub gc: bool,
+    pub keep_newer: Option<u64>,
 
-    /// Delete generations older than <OLDER> days
-    #[clap(short, long, default_value = "30")]
-    pub older: u64,
+    /// Discard all generations older than this many days
+    #[clap(long)]
+    pub remove_older: Option<u64>,
 
-    /// Keep at least <KEEP> generations
-    ///
-    /// This takes precedence over --older and --max.
-    #[clap(short, long, default_value = "10")]
-    pub keep: usize,
-
-    /// Keep at most <MAX> generations
+    /// Ask before removing generations or running garbage collection
     #[clap(short, long)]
-    pub max: Option<usize>,
+    pub interactive: Option<bool>,
 
-    /// Apply to the home-manager profile
-    #[clap(short('H'), long)]
-    pub home: bool,
+    /// Run GC afterwards
+    #[clap(long)]
+    pub gc: Option<bool>,
+}
 
-    /// Apply to the default user profile
-    #[clap(short, long)]
-    pub user: bool,
+impl ConfigFile {
+    fn from_str(s: &str) -> Result<Self, String> {
+        let config: Self = toml::from_str(s)
+            .map_err(|e| e.to_string())?;
 
-    /// Apply to the system profile
-    #[clap(short, long)]
-    pub system: bool,
+        for preset in config.0.values() {
+            preset.validate()?;
+        }
 
-    /// Apply to a custom profile
-    #[clap(short('p'),long("profile"),id("PROFILE_PATH"))]
-    pub other_profiles: Vec<String>,
+        Ok(config)
+    }
+
+    pub fn read_config_file(path: &PathBuf) -> Result<ConfigFile, String> {
+        let s = fs::read_to_string(path)
+            .map_err(|e| e.to_string())?;
+        Self::from_str(&s)
+    }
+
+    fn get_config(path: &PathBuf) -> Result<Option<ConfigFile>, String> {
+        if fs::exists(path).map_err(|e| e.to_string())? {
+            Self::read_config_file(path).map(Some)
+        } else {
+            Ok(None)
+        }
+
+    }
+
+    fn get_system_config() -> Result<Option<ConfigFile>, String> {
+        let path = PathBuf::from_str(SYSTEM_CONFIG)
+            .map_err(|e| e.to_string())?;
+        Self::get_config(&path)
+    }
+
+    fn get_user_config() -> Result<Option<ConfigFile>, String> {
+        let path = xdg::BaseDirectories::with_prefix(APP_PREFIX)
+            .map_err(|e| e.to_string())?
+            .get_config_file(CONFIG_FILENAME);
+        Self::get_config(&path)
+    }
+
+    fn get_preset(&self, s: &str) -> Option<&ConfigPreset> {
+        self.0.get(s)
+    }
+}
+
+impl ConfigPreset {
+    pub fn load(preset_name: &str, custom_config_file: Option<PathBuf>) -> Result<ConfigPreset, String> {
+        let system_config = ConfigFile::get_system_config()?;
+        let user_config = ConfigFile::get_user_config()?;
+        let custom_config = match custom_config_file {
+            Some(path) => Some(ConfigFile::read_config_file(&path)?),
+            None => None,
+        };
+
+        let system_default_preset = system_config.as_ref()
+            .and_then(|c| c.get_preset(DEFAULT_PRESET));
+        let user_default_preset = user_config.as_ref()
+            .and_then(|c| c.get_preset(DEFAULT_PRESET));
+        let custom_default_preset = custom_config.as_ref()
+            .and_then(|c| c.get_preset(DEFAULT_PRESET));
+
+        let system_named_preset = if preset_name != DEFAULT_PRESET {
+            system_config.as_ref()
+                .and_then(|c| c.get_preset(preset_name))
+        } else {
+            None
+        };
+        let user_named_preset = if preset_name != DEFAULT_PRESET {
+            user_config.as_ref()
+                .and_then(|c| c.get_preset(preset_name))
+        } else {
+            None
+        };
+        let custom_named_preset = if preset_name != DEFAULT_PRESET {
+            custom_config.as_ref()
+                .and_then(|c| c.get_preset(preset_name))
+        } else {
+            None
+        };
+
+        let preset = Self::default()
+            .override_with_opt(system_default_preset)
+            .override_with_opt(system_named_preset)
+            .override_with_opt(user_default_preset)
+            .override_with_opt(user_named_preset)
+            .override_with_opt(custom_default_preset)
+            .override_with_opt(custom_named_preset)
+            .finalize();
+
+        Ok(preset)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if let (Some(min), Some(max)) = (self.keep_min, self.keep_max) {
+            if min > max {
+                return Err("Invalid configuration - keep-min is greater than keep-max".to_owned());
+            }
+        }
+
+        if let (Some(newer), Some(older)) = (self.keep_newer, self.remove_older) {
+            if newer > older {
+                return Err("Invalid configuration - keep-newer is greater than remove-older".to_owned());
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn override_with(&self, other: &ConfigPreset) -> Self {
+        let mut keep_min = match (self.keep_min, other.keep_min) {
+            (None, None) => None,
+            (_, Some(0)) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
+        let mut keep_max = match (self.keep_max, other.keep_max) {
+            (None, None) => None,
+            (_, Some(0)) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
+        let mut keep_newer = match (self.keep_newer, other.keep_newer) {
+            (None, None) => None,
+            (_, Some(0)) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
+        let mut remove_older = match (self.remove_older, other.remove_older) {
+            (None, None) => None,
+            (_, Some(0)) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
+        let interactive = match (self.interactive, other.interactive) {
+            (None, None) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
+        let gc = match (self.interactive, other.gc) {
+            (None, None) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
+
+
+        if keep_min > keep_max {
+            if other.keep_min.is_none() {
+                keep_min = keep_max;
+            } else if other.keep_max.is_none() {
+                keep_max = keep_min;
+            } else {
+                panic!("Inconsistent config after load (keep_min: {:?}, keep_max: {:?})", keep_min, keep_max);
+            }
+        }
+
+        if keep_newer > remove_older {
+            if other.keep_newer.is_none() {
+                keep_newer = remove_older;
+            } else if other.keep_max.is_none() {
+                remove_older = keep_newer;
+            } else {
+                panic!("Inconsistent config after load (keep_newer: {:?}, remove_older: {:?})", keep_newer, remove_older);
+            }
+        }
+
+        ConfigPreset { keep_min, keep_max, keep_newer, remove_older, interactive, gc }
+    }
+
+    pub fn override_with_opt(&self, other: Option<&ConfigPreset>) -> Self {
+        if let Some(preset) = other {
+            self.override_with(preset)
+        } else {
+            (*self).clone()
+        }
+    }
+
+    fn finalize(&self) -> Self {
+        ConfigPreset {
+            keep_min: if let Some(0) = self.keep_min { None } else { self.keep_min },
+            keep_max: if let Some(0) = self.keep_max { None } else { self.keep_max },
+            keep_newer: if let Some(0) = self.keep_newer { None } else { self.keep_newer },
+            remove_older: if let Some(0) = self.remove_older { None } else { self.remove_older },
+            interactive: self.interactive,
+            gc: self.gc,
+        }
+    }
+}
+
+impl Default for ConfigPreset {
+    fn default() -> Self {
+        ConfigPreset {
+            keep_min: Some(1),
+            keep_max: None,
+            keep_newer: None,
+            remove_older: None,
+            interactive: None,
+            gc: None,
+        }
+    }
 }

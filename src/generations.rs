@@ -150,7 +150,7 @@ pub fn generations_from_path(path: &Path) -> Result<Vec<Generation>, String> {
             .to_str()
             .ok_or(format!("Cannot convert profile path '{}' to string", path.to_string_lossy()))?
             .to_owned();
-        let profile_name = match path.components().last() {
+        let profile_name = match path.components().next_back() {
             Some(Component::Normal(s)) => s.to_str()
                 .ok_or(format!("Cannot convert profile path '{}' to string", path.to_string_lossy()))?,
             _ => return Err(format!("Unable to retrieve profile name for profile '{}'", path.to_string_lossy())),
