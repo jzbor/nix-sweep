@@ -7,9 +7,9 @@ use clap::Parser;
 use serde::Deserialize;
 
 
-const SYSTEM_CONFIG: &str = "/etc/nix-sweep/config.toml";
+const SYSTEM_CONFIG: &str = "/etc/nix-sweep/presets.toml";
 const APP_PREFIX: &str = "nix-sweep";
-const CONFIG_FILENAME: &str = "config.toml";
+const CONFIG_FILENAME: &str = "presets.toml";
 pub const DEFAULT_PRESET: &str = "default";
 
 
