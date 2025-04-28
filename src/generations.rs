@@ -51,6 +51,10 @@ impl Generation {
         })
     }
 
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     pub fn store_path(&self) -> Result<StorePath, String> {
         StorePath::from_symlink(&self.path)
     }

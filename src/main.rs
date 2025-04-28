@@ -40,14 +40,17 @@ enum Subcommand {
     /// Clean out old profiles
     Cleanout(CleanoutArgs),
 
-    /// Selectively remove gc roots
-    RemoveGCRoots(RemoveGCRootsArgs),
-
     /// Run garbage collection (short for `nix-store --gc`)
     GC(GCArgs),
 
     /// Print out gc roots
     GCRoots(GCRootsArgs),
+
+    /// Print out gc roots
+    Generations(GenerationsArgs),
+
+    /// Selectively remove gc roots
+    RemoveGCRoots(RemoveGCRootsArgs),
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -88,6 +91,24 @@ struct GCArgs {
     /// Don't actually run garbage collection
     #[clap(short, long)]
     dry_run: bool,
+}
+
+#[derive(Clone, Debug, clap::Args)]
+struct GenerationsArgs {
+    /// Only print the paths
+    #[clap(long)]
+    paths: bool,
+
+    /// Present list as tsv
+    #[clap(long)]
+    tsv: bool,
+
+    /// Do not calculate the size of generations
+    #[clap(long)]
+    no_size: bool,
+
+    /// Profiles to list; valid values: system, user, home, <path>
+    profiles: Vec<String>,
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -366,17 +387,17 @@ fn remove_generations(generations: &[Generation], profile_type: &ProfileType) {
     println!();
 }
 
-fn get_generations(profile_type: &ProfileType, config: &config::ConfigPreset) -> Result<Vec<Generation>, String> {
+fn get_generations(profile_type: &ProfileType) -> Result<Vec<Generation>, String> {
     use ProfileType::*;
     match profile_type {
         Home() => generations::home_generations(),
         User() => generations::user_generations(),
         System() => generations::system_generations(),
         Custom(path) => generations::generations_from_path(path),
-    }.map(|gens| mark(gens, config))
+    }
 }
 
-fn run_gc(args: GCArgs) -> Result<(), String> {
+fn cmd_run_gc(args: GCArgs) -> Result<(), String> {
     if args.dry_run {
         println!("\n{}", "=> Skipping garbage collection (dry run)".green());
     } else {
@@ -389,7 +410,7 @@ fn run_gc(args: GCArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn cleanout(args: CleanoutArgs) -> Result<(), String> {
+fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
     args.cleanout_config.validate()?;
     let config = ConfigPreset::load(&args.preset, args.config)?
         .override_with(&args.cleanout_config);
@@ -399,7 +420,7 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
 
     for profile_str in args.profiles {
         let profile = ProfileType::from_str(&profile_str)?;
-        let generations = get_generations(&profile, &config)?;
+        let generations = mark(get_generations(&profile)?, &config);
 
         if args.dry_run {
             list_generations(&generations, &profile, !args.no_size);
@@ -419,13 +440,13 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
 
     if config.gc == Some(true) {
         let gc_args = GCArgs { interactive, _non_interactive: !interactive, dry_run: args.dry_run };
-        run_gc(gc_args)?;
+        cmd_run_gc(gc_args)?;
     }
 
     Ok(())
 }
 
-fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
+fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
@@ -455,7 +476,7 @@ fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
+fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
@@ -486,15 +507,33 @@ fn remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
     Ok(())
 }
 
+fn generations(args: GenerationsArgs) -> Result<(), String> {
+    for profile_str in args.profiles {
+        let profile = ProfileType::from_str(&profile_str)?;
+        let generations = get_generations(&profile)?;
+
+        if args.paths {
+            for gen in generations {
+                println!("{}", gen.path().to_string_lossy());
+            }
+        } else {
+            list_generations(&generations, &profile, !args.no_size);
+        }
+    }
+
+    Ok(())
+}
+
 fn main() {
     let config = Args::parse();
 
     use Subcommand::*;
     let res = match config.subcommand {
-        Cleanout(args) => cleanout(args),
-        GC(args) => run_gc(args),
-        GCRoots(args) => list_gc_roots(args),
-        RemoveGCRoots(args) => remove_gc_roots(args),
+        Cleanout(args) => cmd_cleanout(args),
+        GC(args) => cmd_run_gc(args),
+        GCRoots(args) => cmd_gc_roots(args),
+        RemoveGCRoots(args) => cmd_remove_gc_roots(args),
+        Generations(args) => generations(args),
     };
     resolve(res);
 }
