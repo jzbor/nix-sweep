@@ -48,7 +48,7 @@ pub fn count_gc_deps(gc_roots: &HashMap<PathBuf, Result<StorePath, String>>) -> 
         .map(|(_, v)| v.as_ref().unwrap())
         .flat_map(|v| v.closure())
         .flatten()
-        .fold(|| HashMap::new(), |mut acc, v| {
+        .fold(HashMap::new, |mut acc, v| {
             if let Some(existing) = acc.get_mut(&v) {
                 *existing += 1;
             } else {

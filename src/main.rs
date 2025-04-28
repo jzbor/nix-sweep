@@ -330,7 +330,7 @@ fn list_generations(generations: &[Generation], profile_type: &ProfileType, prin
         .flat_map(|g| g.store_path())
         .flat_map(|p| p.closure())
         .flatten()
-        .fold(|| HashMap::new(), |mut acc, v| {
+        .fold(HashMap::new, |mut acc, v| {
             if let Some(existing) = acc.get_mut(&v) {
                 *existing += 1;
             } else {

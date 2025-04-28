@@ -96,7 +96,7 @@ fn dir_size(path: &PathBuf) -> u64 {
     if ft.is_dir() {
         let entries: Vec<fs::DirEntry> = fs::read_dir(path)
             .map(|i| i.into_iter().flatten().collect())
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
         entries.into_par_iter()
             .map(|entry| dir_size(&entry.path()))
             .sum()
