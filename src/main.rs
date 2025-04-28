@@ -79,7 +79,8 @@ struct CleanoutArgs {
     #[clap(long)]
     no_size: bool,
 
-    /// Profiles to clean out; valid values: system, user, home, <path>
+    /// Profiles to clean out; valid values: system, user, home, <path_to_profile>
+    #[clap(required = true)]
     profiles: Vec<String>,
 }
 
@@ -112,7 +113,8 @@ struct GenerationsArgs {
     #[clap(long)]
     no_size: bool,
 
-    /// Profiles to list; valid values: system, user, home, <path>
+    /// Profiles to list; valid values: system, user, home, <path_to_profile>
+    #[clap(required = true)]
     profiles: Vec<String>,
 }
 

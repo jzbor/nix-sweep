@@ -88,3 +88,20 @@ $ nix-sweep gc-roots
 /home/jzbor/result-1 [43.2 MiB / 0 bytes]
   -> /nix/store/h5rn37dd6vfvr9xb0jq85sq8hf6xchry-coreutils-9.6
 ```
+
+## Presets
+`nix-sweep` allows you to create presets for clean out criteria, that can then be used with `nix-sweep cleanout`.
+
+Preset configs are stored as [TOML](https://toml.io) files.
+If a preset is present in multiple of those files, then the ones further down in the list override ones further up.
+The following locations are checked for preset files:
+* `/etc/nix-sweep/presets.toml`
+* `$XDG_CONFIG_HOME/nix-sweep/presets.toml`
+* configuration files passed via `-C`/`--config`
+
+You can use a preset with the `-p` (`--preset`) flag:
+```console
+nix-sweep -p only-remove-really-old system
+nix-sweep -p nuke-everything system
+nix-sweep -p daily-housekeeping system
+```
