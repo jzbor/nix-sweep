@@ -368,7 +368,10 @@ fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
-    for (link, result) in roots {
+    let mut sorted_roots: Vec<_> = roots.into_iter().collect();
+    sorted_roots.sort_by_key(|e| e.0.clone());
+
+    for (link, result) in sorted_roots {
         if !args.include_profiles && gc_root_is_profile(&link) {
             continue
         }
@@ -395,7 +398,10 @@ fn tidyup_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
-    for (link, result) in roots {
+    let mut sorted_roots: Vec<_> = roots.into_iter().collect();
+    sorted_roots.sort_by_key(|e| e.0.clone());
+
+    for (link, result) in sorted_roots {
         if !args.include_profiles && gc_root_is_profile(&link) {
             continue
         }
@@ -408,9 +414,9 @@ fn tidyup_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
         if result.is_err() {
             ack("Cannot remove as the path is inaccessible");
         } else if ask("Remove gc root?", false) {
-            match fs::remove_file(&link) {
-                Ok(_) => println!("Successfully removed gc root '{}'", link.to_string_lossy()),
-                Err(e) => println!("{}", format!("Error: {}", e).red()),
+            println!("-> Removing gc root '{}'", link.to_string_lossy());
+            if let Err(e) =  fs::remove_file(&link) {
+                println!("{}", format!("Error: {}", e).red());
             }
         }
         println!();
