@@ -406,7 +406,7 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
         } else if interactive {
             list_generations(&generations, &profile, !args.no_size);
 
-            let confirmation = ask("Do you want to proceed?", false);
+            let confirmation = ask("Do you want to delete the marked generations?", false);
             if confirmation {
             remove_generations(&generations, &profile);
             } else {
@@ -470,7 +470,7 @@ fn remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
             continue
         }
 
-        fancy_print_gc_root(&link, &result, args.no_size, Some(&added_size_lookup));
+        fancy_print_gc_root(&link, &result, !args.no_size, Some(&added_size_lookup));
 
         if result.is_err() {
             ack("Cannot remove as the path is inaccessible");
