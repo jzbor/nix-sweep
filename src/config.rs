@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 
 const SYSTEM_CONFIG: &str = "/etc/nix-sweep/presets.toml";
@@ -16,7 +16,7 @@ pub const DEFAULT_PRESET: &str = "default";
 #[derive(Debug, Deserialize)]
 pub struct ConfigFile(HashMap<String, ConfigPreset>);
 
-#[derive(Clone, Debug, Deserialize, Parser)]
+#[derive(Clone, Debug, Serialize, Deserialize, Parser)]
 pub struct ConfigPreset {
     /// Keep at least this many generations
     #[clap(long)]
@@ -40,6 +40,7 @@ pub struct ConfigPreset {
 
     /// Do not ask before removing generations or running garbage collection
     #[clap(short('i'), long("interactive"), overrides_with = "interactive", action = clap::ArgAction::SetTrue)]
+    #[serde(skip_serializing)]
     pub _non_interactive: Option<bool>,
 
     /// Run GC afterwards

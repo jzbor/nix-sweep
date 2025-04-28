@@ -51,6 +51,9 @@ enum Subcommand {
     /// Print out gc roots
     Generations(GenerationsArgs),
 
+    /// Generate a TOML preset config to use with `nix-sweep cleanout`
+    GeneratePreset(GeneratePresetArgs),
+
     /// Selectively remove gc roots
     RemoveGCRoots(RemoveGCRootsArgs),
 }
@@ -157,6 +160,16 @@ struct RemoveGCRootsArgs {
     /// Do not calculate the size of generations
     #[clap(long)]
     no_size: bool,
+}
+
+#[derive(Clone, Debug, clap::Args)]
+struct GeneratePresetArgs {
+    /// Name of the preset that is generated
+    #[clap(short, long, default_value_t = config::DEFAULT_PRESET.to_owned())]
+    preset: String,
+
+    #[clap(flatten)]
+    cleanout_config: config::ConfigPreset,
 }
 
 impl FromStr for ProfileType {
@@ -494,7 +507,7 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn generations(args: GenerationsArgs) -> Result<(), String> {
+fn cmd_generations(args: GenerationsArgs) -> Result<(), String> {
     for profile_str in args.profiles {
         let profile = ProfileType::from_str(&profile_str)?;
         let generations = get_generations(&profile)?;
@@ -511,6 +524,15 @@ fn generations(args: GenerationsArgs) -> Result<(), String> {
     Ok(())
 }
 
+fn cmd_generate_preset(args: GeneratePresetArgs) -> Result<(), String> {
+    let mut presets = HashMap::new();
+    presets.insert(args.preset, args.cleanout_config);
+    let s = toml::to_string(&presets)
+        .map_err(|e| e.to_string())?;
+    println!("{}", s);
+    Ok(())
+}
+
 fn main() {
     let config = Args::parse();
 
@@ -520,7 +542,8 @@ fn main() {
         GC(args) => cmd_run_gc(args),
         GCRoots(args) => cmd_gc_roots(args),
         RemoveGCRoots(args) => cmd_remove_gc_roots(args),
-        Generations(args) => generations(args),
+        Generations(args) => cmd_generations(args),
+        GeneratePreset(args) => cmd_generate_preset(args),
     };
     resolve(res);
 }
