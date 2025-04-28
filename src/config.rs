@@ -39,8 +39,8 @@ pub struct ConfigPreset {
     pub interactive: Option<bool>,
 
     /// Do not ask before removing generations or running garbage collection
-    #[clap(short('i'), long("interactive"), overrides_with = "interactive")]
-    _non_interactive: Option<bool>,
+    #[clap(short('i'), long("interactive"), overrides_with = "interactive", action = clap::ArgAction::SetTrue)]
+    pub _non_interactive: Option<bool>,
 
     /// Run GC afterwards
     #[clap(long, action = clap::ArgAction::SetTrue)]
