@@ -109,7 +109,7 @@
               ++ (if cfg.keepMin == null then [] else [ "--keep-min" (toString cfg.keepMin) ])
               ++ (if cfg.keepMax == null then [] else [ "--keep-max" (toString cfg.keepMax) ])
               ++ (if cfg.keepNewer == null then [] else [ "--keep-newer" (toString cfg.keepNewer) ])
-              ++ (if cfg.removeOlder == null then [] else [ "--removeOlder" (toString cfg.removeOlder) ])
+              ++ (if cfg.removeOlder == null then [] else [ "--remove-older" (toString cfg.removeOlder) ])
               ++ [ "system" ]
             );
             serviceConfig = {
