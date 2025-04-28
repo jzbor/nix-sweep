@@ -6,6 +6,8 @@ use std::str;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::store_paths::StorePath;
+
 #[derive(Eq, Debug)]
 pub struct Generation {
     number: usize,
@@ -47,6 +49,10 @@ impl Generation {
             profile_path,
             marker: false,
         })
+    }
+
+    pub fn store_path(&self) -> Result<StorePath, String> {
+        StorePath::from_symlink(&self.path)
     }
 
     pub fn number(&self) -> usize {

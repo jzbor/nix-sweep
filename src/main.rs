@@ -68,6 +68,9 @@ struct CleanoutArgs {
 
     /// Profiles to clean out; valid values: system, user, home, <path>
     profiles: Vec<String>,
+
+    /// Do not calculate the size of generations
+    no_size: bool,
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -231,6 +234,59 @@ fn ack(question: &str) {
     }
 }
 
+fn fancy_print_generation(generation: &Generation, print_marker: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+    let marker = if generation.marked() { "would remove".red() } else { "would keep".green() };
+    let id_str = format!("[{}]", generation.number()).bright_blue();
+
+    print!("{}\t {} days old", id_str, generation.age());
+
+    if print_marker {
+        print!(", {}", marker);
+    }
+
+    if let Ok(path) = generation.store_path() {
+        let closure_size = size::Size::from_bytes(path.closure_size());
+        let size = if let Some(occurences) = added_size_lookup {
+            let added_size = size::Size::from_bytes(path.added_closure_size(occurences));
+            format!("[{} / {}]", closure_size, added_size).yellow()
+        } else {
+            format!("[{}]", closure_size).yellow()
+        };
+        print!(" \t{}", size);
+    }
+    println!();
+}
+
+fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+    let is_profile = gc_root_is_profile(link);
+    let is_current = gc_root_is_current(link);
+    let attributes = match (is_profile, is_current) {
+        (true, true) => "(profile, current)",
+        (true, false) => "(profile)",
+        (false, true) => "(current)",
+        (false, false) => "",
+    };
+
+    if let Ok(store_path) = store_path_result {
+        let closure_size = size::Size::from_bytes(store_path.closure_size());
+
+        let size = if let Some(occurences) = added_size_lookup {
+            let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
+            format!("[{} / {}]", closure_size, added_size).yellow()
+        } else {
+            format!("[{}]", closure_size).yellow()
+        };
+
+        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
+    } else {
+        let size = "[???]".yellow();
+        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("{}", "  -> <not accessible>".to_string().bright_black());
+    }
+
+}
+
 fn announce_listing(profile_type: &ProfileType) {
     use ProfileType::*;
     match profile_type {
@@ -253,10 +309,23 @@ fn announce_removal(profile_type: &ProfileType) {
 
 fn list_generations(generations: &[Generation], profile_type: &ProfileType) {
     announce_listing(profile_type);
+
+    let added_size_lookup = generations.iter()
+        .flat_map(|g| g.store_path())
+        .flat_map(|p| p.closure())
+        .flatten()
+        .fold(HashMap::new(), |mut acc, v| {
+            if let Some(existing) = acc.get_mut(&v) {
+                *existing += 1;
+            } else {
+                acc.insert(v.clone(), 1);
+            }
+            acc
+        });
+
+
     for gen in generations {
-        let marker = if gen.marked() { "would remove".red() } else { "would keep".green() };
-        let id_str = format!("[{}]", gen.number()).yellow();
-        println!("{}\t {} days old, {}", id_str, gen.age(), marker);
+        fancy_print_generation(gen, true, Some(&added_size_lookup));
     }
     println!();
 }
@@ -334,36 +403,6 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
-    let is_profile = gc_root_is_profile(link);
-    let is_current = gc_root_is_current(link);
-    let attributes = match (is_profile, is_current) {
-        (true, true) => "(profile, current)",
-        (true, false) => "(profile)",
-        (false, true) => "(current)",
-        (false, false) => "",
-    };
-
-    if let Ok(store_path) = store_path_result {
-        let closure_size = size::Size::from_bytes(store_path.closure_size());
-
-        let size = if let Some(occurences) = added_size_lookup {
-            let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
-            format!("[{} / {}]", closure_size, added_size).yellow()
-        } else {
-            format!("[{}]", closure_size).yellow()
-        };
-
-        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
-        println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
-    } else {
-        let size = "[???]".yellow();
-        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
-        println!("{}", "  -> <not accessible>".to_string().bright_black());
-    }
-
-}
-
 fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
@@ -394,7 +433,7 @@ fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn tidyup_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
+fn remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
@@ -433,7 +472,7 @@ fn main() {
         Cleanout(args) => cleanout(args),
         GC(args) => run_gc(args),
         GCRoots(args) => list_gc_roots(args),
-        RemoveGCRoots(args) => tidyup_gc_roots(args),
+        RemoveGCRoots(args) => remove_gc_roots(args),
     };
     resolve(res);
 }

@@ -27,16 +27,6 @@ fn find_links(path: &PathBuf, mut links: Vec<PathBuf>) -> Result<Vec<PathBuf>, S
     Ok(links)
 }
 
-fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
-    if path.is_symlink() {
-        let next = fs::read_link(path)
-            .map_err(|e| e.to_string())?;
-        read_link_full(&next)
-    } else {
-        Ok(path.clone())
-    }
-}
-
 pub fn gc_root_is_profile(path: &Path) -> bool {
     let parent = path.parent().unwrap();
     parent.starts_with("/nix/var/nix/profiles")
@@ -78,7 +68,7 @@ pub fn gc_roots(include_missing: bool) -> Result<HashMap<PathBuf, Result<StorePa
 
     let mut link_map = HashMap::new();
     for link in links.map_err(|e| e.to_string())? {
-        link_map.insert(link.clone(), read_link_full(&link).map(StorePath::new)?);
+        link_map.insert(link.clone(), StorePath::from_symlink(&link));
     }
 
     Ok(link_map)

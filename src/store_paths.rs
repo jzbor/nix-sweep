@@ -20,6 +20,11 @@ impl StorePath {
         }
     }
 
+    pub fn from_symlink(link: &PathBuf) -> Result<Self, String> {
+        let path = read_link_full(link)?;
+        Self::new(path)
+    }
+
     pub fn path(&self) -> &PathBuf {
         &self.0
     }
@@ -100,6 +105,16 @@ fn dir_size(path: &PathBuf) -> u64 {
     }
 
     size
+}
+
+fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
+    if path.is_symlink() {
+        let next = fs::read_link(path)
+            .map_err(|e| e.to_string())?;
+        read_link_full(&next)
+    } else {
+        Ok(path.clone())
+    }
 }
 
 fn store_path_size_cache_lookup(path: &PathBuf) -> Option<u64> {
