@@ -96,12 +96,22 @@ Preset configs are stored as [TOML](https://toml.io) files.
 If a preset is present in multiple of those files, then the ones further down in the list override ones further up.
 The following locations are checked for preset files:
 * `/etc/nix-sweep/presets.toml`
-* `$XDG_CONFIG_HOME/nix-sweep/presets.toml`
+* `$XDG_CONFIG_HOME/nix-sweep/presets.toml`/`~/.config/nix-sweep/presets.toml`
 * configuration files passed via `-C`/`--config`
 
-You can use a preset with the `-p` (`--preset`) flag:
+You can generate a preset config with the `generate-preset` subcommand:
 ```console
+$ nix-sweep generate-preset -p housekeeping --keep-min 10 --remove-older 14
+[housekeeping]
+keep_min = 10
+remove_older = 14
+interactive = true
+gc = false
+```
+
+Presets can be used with the `-p` (`--preset`) flag:
+```console
+nix-sweep -p housekeeping system
 nix-sweep -p only-remove-really-old system
 nix-sweep -p nuke-everything system
-nix-sweep -p daily-housekeeping system
 ```
