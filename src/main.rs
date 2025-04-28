@@ -40,7 +40,7 @@ enum Subcommand {
     Cleanout(CleanoutArgs),
 
     /// Selectively remove gc roots
-    TidyupGCRoots(TidyupGCRootsArgs),
+    RemoveGCRoots(RemoveGCRootsArgs),
 
     /// Run garbage collection (short for `nix-store --gc`)
     GC(GCArgs),
@@ -109,7 +109,7 @@ struct GCRootsArgs {
 }
 
 #[derive(Clone, Debug, clap::Args)]
-struct TidyupGCRootsArgs {
+struct RemoveGCRootsArgs {
     /// Include profiles
     #[clap(short('p'), long)]
     include_profiles: bool,
@@ -394,7 +394,7 @@ fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn tidyup_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
+fn tidyup_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
@@ -433,7 +433,7 @@ fn main() {
         Cleanout(args) => cleanout(args),
         GC(args) => run_gc(args),
         GCRoots(args) => list_gc_roots(args),
-        TidyupGCRoots(args) => tidyup_gc_roots(args),
+        RemoveGCRoots(args) => tidyup_gc_roots(args),
     };
     resolve(res);
 }
