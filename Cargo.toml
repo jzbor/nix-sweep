@@ -8,7 +8,12 @@ license = "MIT"
 [dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
 colored = "3.0.0"
+rayon = "1.10.0"
 serde = { version = "1.0.219", features = ["derive"] }
 size = "0.5.0"
 toml = "0.8.21"
 xdg = "2.5.2"
+
+[profile.profiling]
+inherits = "release"
+debug = true

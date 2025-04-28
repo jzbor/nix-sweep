@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use rayon::prelude::*;
+
 use crate::store_paths::StorePath;
 
 
@@ -41,12 +43,12 @@ pub fn gc_root_is_current(path: &Path) -> bool {
 }
 
 pub fn count_gc_deps(gc_roots: &HashMap<PathBuf, Result<StorePath, String>>) -> HashMap<StorePath, usize> {
-    gc_roots.iter()
+    gc_roots.par_iter()
         .filter(|(_, v)| v.is_ok())
         .map(|(_, v)| v.as_ref().unwrap())
         .flat_map(|v| v.closure())
         .flatten()
-        .fold(HashMap::new(), |mut acc, v| {
+        .fold(|| HashMap::new(), |mut acc, v| {
             if let Some(existing) = acc.get_mut(&v) {
                 *existing += 1;
             } else {
@@ -54,6 +56,12 @@ pub fn count_gc_deps(gc_roots: &HashMap<PathBuf, Result<StorePath, String>>) -> 
             }
             acc
         })
+        .reduce_with(|mut m1, m2| {
+            for (k, v) in m2 {
+                *m1.entry(k).or_default() += v;
+            }
+            m1
+        }).unwrap_or(HashMap::new())
 }
 
 pub fn gc_roots(include_missing: bool) -> Result<HashMap<PathBuf, Result<StorePath, String>>, String> {

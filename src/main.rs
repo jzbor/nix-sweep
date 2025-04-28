@@ -9,6 +9,7 @@ use colored::Colorize;
 use clap::Parser;
 use config::ConfigPreset;
 use generations::Generation;
+use rayon::prelude::*;
 use roots::{gc_root_is_current, gc_root_is_profile};
 use store_paths::StorePath;
 
@@ -66,11 +67,12 @@ struct CleanoutArgs {
     #[clap(short, long)]
     dry_run: bool,
 
+    /// Do not calculate the size of generations
+    #[clap(long)]
+    no_size: bool,
+
     /// Profiles to clean out; valid values: system, user, home, <path>
     profiles: Vec<String>,
-
-    /// Do not calculate the size of generations
-    no_size: bool,
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -109,6 +111,10 @@ struct GCRootsArgs {
     /// Include gc roots that are referenced, but could not be found
     #[clap(long)]
     include_missing: bool,
+
+    /// Do not calculate the size of generations
+    #[clap(long)]
+    no_size: bool,
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -124,6 +130,10 @@ struct RemoveGCRootsArgs {
     /// Include gc roots that are referenced, but could not be found
     #[clap(long)]
     include_missing: bool,
+
+    /// Do not calculate the size of generations
+    #[clap(long)]
+    no_size: bool,
 }
 
 impl FromStr for ProfileType {
@@ -234,7 +244,7 @@ fn ack(question: &str) {
     }
 }
 
-fn fancy_print_generation(generation: &Generation, print_marker: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+fn fancy_print_generation(generation: &Generation, print_marker: bool, print_size: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
     let marker = if generation.marked() { "would remove".red() } else { "would keep".green() };
     let id_str = format!("[{}]", generation.number()).bright_blue();
 
@@ -244,20 +254,22 @@ fn fancy_print_generation(generation: &Generation, print_marker: bool, added_siz
         print!(", {}", marker);
     }
 
-    if let Ok(path) = generation.store_path() {
-        let closure_size = size::Size::from_bytes(path.closure_size());
-        let size = if let Some(occurences) = added_size_lookup {
-            let added_size = size::Size::from_bytes(path.added_closure_size(occurences));
-            format!("[{} / {}]", closure_size, added_size).yellow()
-        } else {
-            format!("[{}]", closure_size).yellow()
-        };
-        print!(" \t{}", size);
+    if print_size {
+        if let Ok(path) = generation.store_path() {
+            let closure_size = size::Size::from_bytes(path.closure_size());
+            let size = if let Some(occurences) = added_size_lookup {
+                let added_size = size::Size::from_bytes(path.added_closure_size(occurences));
+                format!("[{} / {}]", closure_size, added_size).yellow()
+            } else {
+                format!("[{}]", closure_size).yellow()
+            };
+            print!(" \t{}", size);
+        }
     }
     println!();
 }
 
-fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>, print_size: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
     let is_profile = gc_root_is_profile(link);
     let is_current = gc_root_is_current(link);
     let attributes = match (is_profile, is_current) {
@@ -268,20 +280,24 @@ fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String
     };
 
     if let Ok(store_path) = store_path_result {
-        let closure_size = size::Size::from_bytes(store_path.closure_size());
+        let size = if print_size {
+            let closure_size = size::Size::from_bytes(store_path.closure_size());
 
-        let size = if let Some(occurences) = added_size_lookup {
-            let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
-            format!("[{} / {}]", closure_size, added_size).yellow()
+            if let Some(occurences) = added_size_lookup {
+                let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
+                format!(" [{} / {}]", closure_size, added_size).yellow()
+            } else {
+                format!(" [{}]", closure_size).yellow()
+            }
         } else {
-            format!("[{}]", closure_size).yellow()
+            "".to_owned().into()
         };
 
-        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("{}{} {}", link.to_string_lossy(), size, attributes.blue());
         println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
     } else {
-        let size = "[???]".yellow();
-        println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
+        let size = if print_size { " [???]".yellow() } else { "".to_owned().into() };
+        println!("{}{} {}", link.to_string_lossy(), size, attributes.blue());
         println!("{}", "  -> <not accessible>".to_string().bright_black());
     }
 
@@ -307,25 +323,31 @@ fn announce_removal(profile_type: &ProfileType) {
     }
 }
 
-fn list_generations(generations: &[Generation], profile_type: &ProfileType) {
+fn list_generations(generations: &[Generation], profile_type: &ProfileType, print_size: bool) {
     announce_listing(profile_type);
 
-    let added_size_lookup = generations.iter()
+    let added_size_lookup = generations.par_iter()
         .flat_map(|g| g.store_path())
         .flat_map(|p| p.closure())
         .flatten()
-        .fold(HashMap::new(), |mut acc, v| {
+        .fold(|| HashMap::new(), |mut acc, v| {
             if let Some(existing) = acc.get_mut(&v) {
                 *existing += 1;
             } else {
                 acc.insert(v.clone(), 1);
             }
             acc
-        });
+        })
+        .reduce_with(|mut m1, m2| {
+            for (k, v) in m2 {
+                *m1.entry(k).or_default() += v;
+            }
+            m1
+        }).unwrap_or(HashMap::new());
 
 
     for gen in generations {
-        fancy_print_generation(gen, true, Some(&added_size_lookup));
+        fancy_print_generation(gen, true, print_size, Some(&added_size_lookup));
     }
     println!();
 }
@@ -380,9 +402,9 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
         let generations = get_generations(&profile, &config)?;
 
         if args.dry_run {
-            list_generations(&generations, &profile);
+            list_generations(&generations, &profile, !args.no_size);
         } else if interactive {
-            list_generations(&generations, &profile);
+            list_generations(&generations, &profile, !args.no_size);
 
             let confirmation = ask("Do you want to proceed?", false);
             if confirmation {
@@ -425,7 +447,7 @@ fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
                 .unwrap_or(String::from("na"));
             println!("{}\t{}", link.to_string_lossy(), path);
         } else {
-            fancy_print_gc_root(&link, &result, Some(&added_size_lookup));
+            fancy_print_gc_root(&link, &result, !args.no_size, Some(&added_size_lookup));
             println!()
         }
     }
@@ -448,7 +470,7 @@ fn remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
             continue
         }
 
-        fancy_print_gc_root(&link, &result, Some(&added_size_lookup));
+        fancy_print_gc_root(&link, &result, args.no_size, Some(&added_size_lookup));
 
         if result.is_err() {
             ack("Cannot remove as the path is inaccessible");

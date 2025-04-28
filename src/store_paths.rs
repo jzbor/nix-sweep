@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use std::{fs, process};
 use std::path::PathBuf;
 
+use rayon::prelude::*;
+
 
 static STORE_PATH_SIZE_CACHE: Mutex<Option<HashMap<PathBuf, u64>>> = Mutex::new(None);
 
@@ -68,7 +70,7 @@ impl StorePath {
 
     pub fn closure_size(&self) -> u64 {
         let paths = self.closure().unwrap_or_default();
-        paths.iter()
+        paths.par_iter()
             .map(|p| p.size())
             .sum()
     }
@@ -84,7 +86,6 @@ impl StorePath {
 
 
 fn dir_size(path: &PathBuf) -> u64 {
-    let mut size = 0;
     let metadata = match path.metadata() {
         Ok(meta) => meta,
         Err(_) => return 0,
@@ -93,18 +94,17 @@ fn dir_size(path: &PathBuf) -> u64 {
     let ft = metadata.file_type();
 
     if ft.is_dir() {
-        for entry in fs::read_dir(path).into_iter().flatten() {
-            let child_path = match entry {
-                Ok(e) => e.path(),
-                Err(_) => continue,
-            };
-            size += dir_size(&child_path);
-        }
+        let entries: Vec<fs::DirEntry> = fs::read_dir(path)
+            .map(|i| i.into_iter().flatten().collect())
+            .unwrap_or(Vec::new());
+        entries.into_par_iter()
+            .map(|entry| dir_size(&entry.path()))
+            .sum()
     } else if ft.is_file() {
-        size += metadata.len();
+        metadata.len()
+    } else {
+        0
     }
-
-    size
 }
 
 fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
