@@ -9,7 +9,6 @@ use colored::Colorize;
 use clap::Parser;
 use config::ConfigPreset;
 use generations::Generation;
-use rayon::prelude::*;
 use roots::{gc_root_is_current, gc_root_is_profile};
 use store_paths::StorePath;
 
@@ -347,25 +346,10 @@ fn announce_removal(profile_type: &ProfileType) {
 fn list_generations(generations: &[Generation], profile_type: &ProfileType, print_size: bool) {
     announce_listing(profile_type);
 
-    let added_size_lookup = generations.par_iter()
+    let store_paths: Vec<_> = generations.iter()
         .flat_map(|g| g.store_path())
-        .flat_map(|p| p.closure())
-        .flatten()
-        .fold(HashMap::new, |mut acc, v| {
-            if let Some(existing) = acc.get_mut(&v) {
-                *existing += 1;
-            } else {
-                acc.insert(v.clone(), 1);
-            }
-            acc
-        })
-        .reduce_with(|mut m1, m2| {
-            for (k, v) in m2 {
-                *m1.entry(k).or_default() += v;
-            }
-            m1
-        }).unwrap_or(HashMap::new());
-
+        .collect();
+    let added_size_lookup = store_paths::count_closure_paths(&store_paths);
 
     for gen in generations {
         fancy_print_generation(gen, true, print_size, Some(&added_size_lookup));

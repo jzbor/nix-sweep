@@ -3,9 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use rayon::prelude::*;
-
-use crate::store_paths::StorePath;
+use crate::store_paths::{self, StorePath};
 
 
 const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
@@ -43,25 +41,12 @@ pub fn gc_root_is_current(path: &Path) -> bool {
 }
 
 pub fn count_gc_deps(gc_roots: &HashMap<PathBuf, Result<StorePath, String>>) -> HashMap<StorePath, usize> {
-    gc_roots.par_iter()
+    let paths: Vec<_> = gc_roots.iter()
         .filter(|(_, v)| v.is_ok())
         .map(|(_, v)| v.as_ref().unwrap())
-        .flat_map(|v| v.closure())
-        .flatten()
-        .fold(HashMap::new, |mut acc, v| {
-            if let Some(existing) = acc.get_mut(&v) {
-                *existing += 1;
-            } else {
-                acc.insert(v.clone(), 1);
-            }
-            acc
-        })
-        .reduce_with(|mut m1, m2| {
-            for (k, v) in m2 {
-                *m1.entry(k).or_default() += v;
-            }
-            m1
-        }).unwrap_or(HashMap::new())
+        .cloned()
+        .collect();
+    store_paths::count_closure_paths(&paths)
 }
 
 pub fn gc_roots(include_missing: bool) -> Result<HashMap<PathBuf, Result<StorePath, String>>, String> {

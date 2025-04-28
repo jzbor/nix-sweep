@@ -70,7 +70,7 @@ impl StorePath {
 
     pub fn closure_size(&self) -> u64 {
         let paths = self.closure().unwrap_or_default();
-        paths.par_iter()
+        paths.iter()
             .map(|p| p.size())
             .sum()
     }
@@ -84,6 +84,25 @@ impl StorePath {
     }
 }
 
+pub fn count_closure_paths(input_paths: &[StorePath]) -> HashMap<StorePath, usize> {
+    input_paths.par_iter()
+        .flat_map(|p| p.closure())
+        .flatten()
+        .fold(HashMap::new, |mut acc, v| {
+            if let Some(existing) = acc.get_mut(&v) {
+                *existing += 1;
+            } else {
+                acc.insert(v.clone(), 1);
+            }
+            acc
+        })
+        .reduce_with(|mut m1, m2| {
+            for (k, v) in m2 {
+                *m1.entry(k).or_default() += v;
+            }
+            m1
+        }).unwrap_or(HashMap::new())
+}
 
 fn dir_size(path: &PathBuf) -> u64 {
     let metadata = match path.symlink_metadata() {
@@ -93,10 +112,13 @@ fn dir_size(path: &PathBuf) -> u64 {
     let ft = metadata.file_type();
 
     if ft.is_dir() {
-        let entries: Vec<fs::DirEntry> = fs::read_dir(path)
-            .map(|i| i.into_iter().flatten().collect())
-            .unwrap_or_default();
-        entries.into_par_iter()
+        let read_dir = match fs::read_dir(path) {
+            Ok(rd) => rd,
+            Err(_) => return 0,
+        };
+        read_dir.into_iter()
+            .flatten()
+            .par_bridge()
             .map(|entry| dir_size(&entry.path()))
             .sum()
     } else if ft.is_file() {
