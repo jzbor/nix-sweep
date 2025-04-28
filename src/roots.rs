@@ -50,6 +50,21 @@ pub fn gc_root_is_current(path: &Path) -> bool {
     || path.ends_with("nix/flake-registry.json")
 }
 
+pub fn count_gc_deps(gc_roots: &HashMap<PathBuf, Result<StorePath, String>>) -> HashMap<StorePath, usize> {
+    gc_roots.iter()
+        .filter(|(_, v)| v.is_ok())
+        .map(|(_, v)| v.as_ref().unwrap())
+        .flat_map(|v| v.closure())
+        .flatten()
+        .fold(HashMap::new(), |mut acc, v| {
+            if let Some(existing) = acc.get_mut(&v) {
+                *existing += 1;
+            } else {
+                acc.insert(v.clone(), 1);
+            }
+            acc
+        })
+}
 
 pub fn gc_roots(include_missing: bool) -> Result<HashMap<PathBuf, Result<StorePath, String>>, String> {
     let gc_roots_dir = PathBuf::from_str(GC_ROOTS_DIR)

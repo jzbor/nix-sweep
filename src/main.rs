@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
 use std::path::Path;
@@ -333,7 +334,7 @@ fn cleanout(args: CleanoutArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>) {
+fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
     let is_profile = gc_root_is_profile(link);
     let is_current = gc_root_is_current(link);
     let attributes = match (is_profile, is_current) {
@@ -344,7 +345,15 @@ fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String
     };
 
     if let Ok(store_path) = store_path_result {
-        let size = format!("[{}]", size::Size::from_bytes(store_path.closure_size())).yellow();
+        let closure_size = size::Size::from_bytes(store_path.closure_size());
+
+        let size = if let Some(occurences) = added_size_lookup {
+            let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
+            format!("[{} / {}]", closure_size, added_size).yellow()
+        } else {
+            format!("[{}]", closure_size).yellow()
+        };
+
         println!("{} {} {}", link.to_string_lossy(), size, attributes.blue());
         println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
     } else {
@@ -357,6 +366,7 @@ fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String
 
 fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
+    let added_size_lookup = roots::count_gc_deps(&roots);
 
     for (link, result) in roots {
         if !args.include_profiles && gc_root_is_profile(&link) {
@@ -373,7 +383,7 @@ fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
                 .unwrap_or(String::from("na"));
             println!("{}\t{}", link.to_string_lossy(), path);
         } else {
-            fancy_print_gc_root(&link, &result);
+            fancy_print_gc_root(&link, &result, Some(&added_size_lookup));
             println!()
         }
     }
@@ -383,6 +393,7 @@ fn list_gc_roots(args: GCRootsArgs) -> Result<(), String> {
 
 fn tidyup_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
+    let added_size_lookup = roots::count_gc_deps(&roots);
 
     for (link, result) in roots {
         if !args.include_profiles && gc_root_is_profile(&link) {
@@ -392,7 +403,7 @@ fn tidyup_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
             continue
         }
 
-        fancy_print_gc_root(&link, &result);
+        fancy_print_gc_root(&link, &result, Some(&added_size_lookup));
 
         if result.is_err() {
             ack("Cannot remove as the path is inaccessible");

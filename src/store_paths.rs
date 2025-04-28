@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 static STORE_PATH_SIZE_CACHE: Mutex<Option<HashMap<PathBuf, u64>>> = Mutex::new(None);
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct StorePath(PathBuf);
 
 impl StorePath {
@@ -64,6 +64,14 @@ impl StorePath {
     pub fn closure_size(&self) -> u64 {
         let paths = self.closure().unwrap_or_default();
         paths.iter()
+            .map(|p| p.size())
+            .sum()
+    }
+
+    pub fn added_closure_size(&self, counts: &HashMap<StorePath, usize>) -> u64{
+        let paths = self.closure().unwrap_or_default();
+        paths.iter()
+            .filter(|p| counts.get(p).cloned().unwrap_or(1) <= 1)
             .map(|p| p.size())
             .sum()
     }
