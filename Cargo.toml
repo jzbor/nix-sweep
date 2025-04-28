@@ -2,7 +2,7 @@
 name = "nix-sweep"
 version = "0.2.1"
 edition = "2021"
-description = "Utility to clean up old Nix profile generations"
+description = "Utility to clean up old Nix profile generations and left-over garbage collection roots"
 license = "MIT"
 
 [dependencies]

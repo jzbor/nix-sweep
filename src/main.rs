@@ -37,6 +37,9 @@ pub struct Args {
 #[derive(Clone, Debug, clap::Subcommand)]
 enum Subcommand {
     /// Clean out old profiles
+    ///
+    /// Positive criteria (e.g. --keep-min, --keep-newer) are prioritized over negative ones
+    /// (e.g. --keep-max, --remove-older).
     Cleanout(CleanoutArgs),
 
     /// Run garbage collection (short for `nix-store --gc`)
