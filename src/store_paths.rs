@@ -86,11 +86,10 @@ impl StorePath {
 
 
 fn dir_size(path: &PathBuf) -> u64 {
-    let metadata = match path.metadata() {
+    let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
         Err(_) => return 0,
     };
-        // .map_err(|e| e.to_string())?;
     let ft = metadata.file_type();
 
     if ft.is_dir() {
