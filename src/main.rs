@@ -40,6 +40,7 @@ enum Subcommand {
     ///
     /// Positive criteria (e.g. --keep-min, --keep-newer) are prioritized over negative ones
     /// (e.g. --keep-max, --remove-older).
+    /// Passing 0 on any cleanout criterion will reset it to the default behavior.
     Cleanout(CleanoutArgs),
 
     /// Run garbage collection (short for `nix-store --gc`)
