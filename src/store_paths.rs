@@ -8,7 +8,11 @@ use std::path::PathBuf;
 use rayon::prelude::*;
 
 
+const STORE_PATH: &str = "/nix/store";
+const STORE_LINKS_PATH: &str = "/nix/store/.links";
+
 static STORE_PATH_SIZE_CACHE: Mutex<Option<HashMap<PathBuf, u64>>> = Mutex::new(None);
+
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct StorePath(PathBuf);
@@ -17,9 +21,22 @@ impl StorePath {
     pub fn new(path: PathBuf) -> Result<Self, String> {
         if !path.starts_with("/nix/store") {
             Err(format!("'{}' is not a path in the nix store", path.to_string_lossy()))
+        } else if path.starts_with("/nix/store/.local") {
+            Err(format!("'{}' is not a regular path", path.to_string_lossy()))
         } else {
             Ok(StorePath(path))
         }
+    }
+
+    pub fn iter_all() -> Result<impl Iterator<Item = Self>, String> {
+        let iterator = fs::read_dir(STORE_PATH)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .flatten()
+            .filter(|p| !p.path().starts_with(STORE_LINKS_PATH))
+            .map(|p| Self::new(p.path()))
+            .flatten();
+        Ok(iterator)
     }
 
     pub fn from_symlink(link: &PathBuf) -> Result<Self, String> {
@@ -102,6 +119,10 @@ pub fn count_closure_paths(input_paths: &[StorePath]) -> HashMap<StorePath, usiz
             }
             m1
         }).unwrap_or(HashMap::new())
+}
+
+pub fn store_size() -> u64 {
+    dir_size(&PathBuf::from(STORE_PATH))
 }
 
 fn dir_size(path: &PathBuf) -> u64 {

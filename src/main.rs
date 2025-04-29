@@ -9,7 +9,7 @@ use colored::Colorize;
 use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
 use generations::Generation;
-use roots::{gc_root_is_current, gc_root_is_profile};
+use roots::{gc_root_is_current, gc_root_is_profile, gc_roots};
 use store_paths::StorePath;
 
 mod config;
@@ -36,6 +36,8 @@ pub struct Args {
 
 #[derive(Clone, Debug, clap::Subcommand)]
 enum Subcommand {
+    Analyze(AnalyzeArgs),
+
     /// Clean out old profiles
     ///
     /// Positive criteria (e.g. --keep-min, --keep-newer) are prioritized over negative ones
@@ -183,6 +185,10 @@ struct GeneratePresetArgs {
 struct ManArgs {
     directory: path::PathBuf,
 }
+
+#[derive(Clone, Debug, clap::Args)]
+struct AnalyzeArgs {}
+
 
 impl FromStr for ProfileType {
     type Err = String;
@@ -570,6 +576,75 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
     Ok(())
 }
 
+fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
+    let total_size: u64 = StorePath::iter_all()?
+        .map(|p| StorePath::size(&p))
+        .sum();
+
+    println!("Total store size:\t{}", size::Size::from_bytes(total_size));
+
+    let mut system_paths: Vec<_> = generations::system_generations()
+        .unwrap_or_default()
+        .iter()
+        .map(|g| g.store_path())
+        .flatten()
+        .flat_map(|p| p.closure())
+        .flatten()
+        .collect();
+    system_paths.sort_by_key(|p| p.path().to_string_lossy().to_string());
+    system_paths.dedup();
+    let system_size: u64 = system_paths.iter()
+        .map(|p| p.size())
+        .sum();
+    println!("System profile size:\t{} ({}%)", size::Size::from_bytes(system_size), system_size * 100 / total_size);
+
+    let mut user_paths: Vec<_> = generations::user_generations()
+        .unwrap_or_default()
+        .iter()
+        .map(|g| g.store_path())
+        .flatten()
+        .flat_map(|p| p.closure())
+        .flatten()
+        .collect();
+    user_paths.sort_by_key(|p| p.path().to_string_lossy().to_string());
+    user_paths.dedup();
+    let user_size: u64 = user_paths.iter()
+        .map(|p| p.size())
+        .sum();
+    println!("User profile size:\t{} ({}%)", size::Size::from_bytes(user_size), user_size * 100 / total_size);
+
+    let mut home_paths: Vec<_> = generations::home_generations()
+        .unwrap_or_default()
+        .iter()
+        .map(|g| g.store_path())
+        .flatten()
+        .flat_map(|p| p.closure())
+        .flatten()
+        .collect();
+    home_paths.sort_by_key(|p| p.path().to_string_lossy().to_string());
+    home_paths.dedup();
+    let home_size: u64 = home_paths.iter()
+        .map(|p| p.size())
+        .sum();
+    println!("Home profile size:\t{} ({}%)", size::Size::from_bytes(home_size), home_size * 100 / total_size);
+
+    let mut reachable_paths: Vec<_> = gc_roots(false)
+        .unwrap_or_default()
+        .iter()
+        .flat_map(|r| r.1.as_ref().ok())
+        .flat_map(|p| p.closure())
+        .flatten()
+        .collect();
+    reachable_paths.sort_by_key(|p| p.path().to_string_lossy().to_string());
+    reachable_paths.dedup();
+    let reachable_size: u64 = reachable_paths.iter()
+        .map(|p| p.size())
+        .sum();
+    println!("Reachable paths:\t{} ({}%)", size::Size::from_bytes(reachable_size), reachable_size * 100 / total_size);
+
+    Ok(())
+}
+
 fn main() {
     let config = Args::parse();
 
@@ -582,6 +657,7 @@ fn main() {
         Generations(args) => cmd_generations(args),
         GeneratePreset(args) => cmd_generate_preset(args),
         Man(args) => cmd_man(args),
+        Analyze(args) => cmd_analyze(args),
     };
     resolve(res);
 }
