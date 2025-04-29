@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::{fs, path, process};
 use colored::Colorize;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
 use generations::Generation;
 use roots::{gc_root_is_current, gc_root_is_profile};
@@ -57,6 +57,10 @@ enum Subcommand {
 
     /// Selectively remove gc roots
     RemoveGCRoots(RemoveGCRootsArgs),
+
+    /// Export manpage
+    #[clap(hide(true))]
+    Man(ManArgs),
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -173,6 +177,11 @@ struct GeneratePresetArgs {
 
     #[clap(flatten)]
     cleanout_config: config::ConfigPreset,
+}
+
+#[derive(Clone, Debug, clap::Args)]
+struct ManArgs {
+    directory: path::PathBuf,
 }
 
 impl FromStr for ProfileType {
@@ -536,6 +545,31 @@ fn cmd_generate_preset(args: GeneratePresetArgs) -> Result<(), String> {
     Ok(())
 }
 
+fn cmd_man(args: ManArgs) -> Result<(), String> {
+    // export main
+    let man = clap_mangen::Man::new(Args::command());
+    let mut buffer: Vec<u8> = Default::default();
+    man.render(&mut buffer)
+        .map_err(|e| e.to_string())?;
+    let file = args.directory.join("nix-sweep.1");
+    fs::write(&file, buffer)
+        .map_err(|e| e.to_string())?;
+    println!("Written {}", file.to_string_lossy());
+
+    for subcommand in Args::command().get_subcommands() {
+        let man = clap_mangen::Man::new(subcommand.clone());
+        let mut buffer: Vec<u8> = Default::default();
+        man.render(&mut buffer)
+            .map_err(|e| e.to_string())?;
+        let file = args.directory.join(format!("nix-sweep-{}.1", subcommand.to_string()));
+        fs::write(&file, buffer)
+            .map_err(|e| e.to_string())?;
+        println!("Written {}", file.to_string_lossy());
+    }
+
+    Ok(())
+}
+
 fn main() {
     let config = Args::parse();
 
@@ -547,6 +581,7 @@ fn main() {
         RemoveGCRoots(args) => cmd_remove_gc_roots(args),
         Generations(args) => cmd_generations(args),
         GeneratePreset(args) => cmd_generate_preset(args),
+        Man(args) => cmd_man(args),
     };
     resolve(res);
 }
