@@ -20,10 +20,18 @@
         inherit src strictDeps;
       };
 
-      nativeBuildInputs = [ pkgs.makeWrapper ];
+      nativeBuildInputs = with pkgs; [
+        makeWrapper
+        installShellFiles
+      ];
       postFixup = ''
         wrapProgram $out/bin/nix-sweep \
           --set PATH ${pkgs.lib.makeBinPath [ pkgs.nix ]}
+      '';
+      postInstall = ''
+        mkdir ./manpages
+        $out/bin/nix-sweep man ./manpages
+        installManPage ./manpages/*
       '';
     };
 
