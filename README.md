@@ -113,8 +113,8 @@ You can generate a preset config with the `generate-preset` subcommand:
 ```console
 $ nix-sweep generate-preset -p housekeeping --keep-min 10 --remove-older 14
 [housekeeping]
-keep_min = 10
-remove_older = 14
+keep-min = 10
+remove-older = 14
 interactive = true
 gc = false
 ```

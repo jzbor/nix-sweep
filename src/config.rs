@@ -17,6 +17,7 @@ pub const DEFAULT_PRESET: &str = "default";
 pub struct ConfigFile(HashMap<String, ConfigPreset>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Parser)]
+#[serde(rename_all = "kebab-case")]
 pub struct ConfigPreset {
     /// Keep at least this many generations
     #[clap(long)]
