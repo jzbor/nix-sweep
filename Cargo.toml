@@ -16,6 +16,9 @@ size = "0.5.0"
 toml = "0.8.21"
 xdg = "2.5.2"
 
+[profile.release]
+lto = true
+
 [profile.profiling]
 inherits = "release"
 debug = true
