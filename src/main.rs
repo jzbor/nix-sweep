@@ -152,6 +152,10 @@ struct GCRootsArgs {
 
 #[derive(Clone, Debug, clap::Args)]
 struct RemoveGCRootsArgs {
+    /// Delete all qualifying gc roots without asking for user confirmation
+    #[clap(short, long)]
+    force: bool,
+
     /// Include profiles
     #[clap(short('p'), long)]
     include_profiles: bool,
@@ -341,11 +345,11 @@ fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String
             "".to_owned().into()
         };
 
-        println!("{}{} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("\n{}{} {}", link.to_string_lossy(), size, attributes.blue());
         println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
     } else {
         let size = if print_size { " [???]".yellow() } else { "".to_owned().into() };
-        println!("{}{} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("\n{}{} {}", link.to_string_lossy(), size, attributes.blue());
         println!("{}", "  -> <not accessible>".to_string().bright_black());
     }
 
@@ -481,10 +485,10 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
             println!("{}\t{}", link.to_string_lossy(), path);
         } else {
             fancy_print_gc_root(&link, &result, !args.no_size, Some(&added_size_lookup));
-            println!()
         }
     }
 
+    println!();
     Ok(())
 }
 
@@ -503,19 +507,23 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
             continue
         }
 
-        fancy_print_gc_root(&link, &result, !args.no_size, Some(&added_size_lookup));
+        if !args.force {
+            fancy_print_gc_root(&link, &result, !args.no_size, Some(&added_size_lookup));
+        }
 
         if result.is_err() {
             ack("Cannot remove as the path is inaccessible");
-        } else if ask("Remove gc root?", false) {
+        } else if args.force || ask("Remove gc root?", false) {
             println!("-> Removing gc root '{}'", link.to_string_lossy());
             if let Err(e) =  fs::remove_file(&link) {
                 println!("{}", format!("Error: {}", e).red());
             }
         }
-        println!();
     }
 
+    if !args.force {
+        println!();
+    }
     Ok(())
 }
 
