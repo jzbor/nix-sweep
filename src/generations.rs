@@ -4,6 +4,7 @@ use std::path::Component;
 use std::process;
 use std::str;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::time::SystemTime;
 
 use crate::store_paths::StorePath;
@@ -13,7 +14,7 @@ pub struct Generation {
     number: usize,
     path: PathBuf,
     profile_path: PathBuf,
-    age: u64,
+    age: Duration,
     marker: bool,
 }
 
@@ -40,8 +41,7 @@ impl Generation {
             .map_err(|e| format!("Unable to get metadata for path {} ({})", dirent.path().to_string_lossy(), e))?;
         let now = SystemTime::now();
         let age = now.duration_since(last_modified)
-            .map_err(|e| format!("Unable to calculate generation age ({})", e))?
-            .as_secs() / 60 / 60 / 24;
+            .map_err(|e| format!("Unable to calculate generation age ({})", e))?;
 
         Ok(Generation {
             number, age,
@@ -67,8 +67,12 @@ impl Generation {
         &self.profile_path
     }
 
-    pub fn age(&self) -> u64 {
+    pub fn age(&self) -> Duration {
         self.age
+    }
+
+    pub fn age_days(&self) -> u64 {
+        self.age.as_secs() / 60 / 60 / 24
     }
 
     pub fn mark(&mut self) {

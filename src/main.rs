@@ -222,7 +222,7 @@ fn mark(mut generations: Vec<Generation>, config: &config::ConfigPreset) -> Vec<
     // mark older generations
     if let Some(older_days) = config.remove_older {
         for generation in generations.iter_mut() {
-            if generation.age() >= older_days {
+            if generation.age_days() >= older_days {
                 generation.mark();
             }
         }
@@ -240,7 +240,7 @@ fn mark(mut generations: Vec<Generation>, config: &config::ConfigPreset) -> Vec<
     // unmark newer generations
     if let Some(newer_days) = config.keep_newer {
         for generation in generations.iter_mut() {
-            if generation.age() < newer_days {
+            if generation.age_days() < newer_days {
                 generation.unmark();
             }
         }
@@ -299,7 +299,7 @@ fn fancy_print_generation(generation: &Generation, print_marker: bool, print_siz
     let marker = if generation.marked() { "would remove".red() } else { "would keep".green() };
     let id_str = format!("[{}]", generation.number()).bright_blue();
 
-    print!("{}\t {} days old", id_str, generation.age());
+    print!("{}\t {} days old", id_str, generation.age_days());
 
     if print_marker {
         print!(", {}", marker);
@@ -389,7 +389,7 @@ fn list_generations(generations: &[Generation], profile_type: &ProfileType, prin
 fn remove_generations(generations: &[Generation], profile_type: &ProfileType) {
     announce_removal(profile_type);
     for gen in generations {
-        let age_str = if gen.age() == 1 { "1 day old".to_owned() } else { format!("{} days old", gen.age()) };
+        let age_str = if gen.age_days() == 1 { "1 day old".to_owned() } else { format!("{} days old", gen.age_days()) };
         if gen.marked() {
             println!("{}", format!("-> Removing generation {} ({})", gen.number(), age_str).bright_blue());
             resolve(gen.remove());

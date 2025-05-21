@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::time::Duration;
+use std::{collections::HashMap, time::SystemTime};
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -11,10 +12,24 @@ const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
 
 pub struct GCRoot {
     link: PathBuf,
+    age: Duration,
     store_path: Result<StorePath, String>,
 }
 
 impl GCRoot {
+    fn new(link: PathBuf) -> Result<Self, String> {
+        let store_path = StorePath::from_symlink(&link);
+        let last_modified = fs::symlink_metadata(&link)
+            .map_err(|e| format!("Unable to get metadata for path {} ({})", link.to_string_lossy(), e))?
+            .modified()
+            .map_err(|e| format!("Unable to get metadata for path {} ({})", link.to_string_lossy(), e))?;
+        let now = SystemTime::now();
+        let age = now.duration_since(last_modified)
+            .map_err(|e| format!("Unable to calculate generation age ({})", e))?;
+
+        Ok(GCRoot { link, age, store_path })
+    }
+
     pub fn link(&self) -> &PathBuf {
         &self.link
     }
@@ -34,6 +49,14 @@ impl GCRoot {
         || self.link.starts_with("/run/booted-system")
         || self.link.ends_with("home-manager/gcroots/current-home")
         || self.link.ends_with("nix/flake-registry.json")
+    }
+
+    pub fn age(&self) -> Duration {
+        self.age
+    }
+
+    pub fn age_days(&self) -> u64 {
+        self.age.as_secs() / 60 / 60 / 24
     }
 }
 
@@ -76,8 +99,7 @@ pub fn gc_roots(include_missing: bool) -> Result<Vec<GCRoot>, String> {
 
     let mut roots = Vec::new();
     for link_path in links.map_err(|e| e.to_string())? {
-        let store_path = StorePath::from_symlink(&link_path);
-        let new = GCRoot { link: link_path, store_path };
+        let new = GCRoot::new(link_path)?;
         roots.push(new)
     }
 
