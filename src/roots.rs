@@ -1,12 +1,41 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::store_paths::{self, StorePath};
 
 
 const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
+
+
+pub struct GCRoot {
+    link: PathBuf,
+    store_path: Result<StorePath, String>,
+}
+
+impl GCRoot {
+    pub fn link(&self) -> &PathBuf {
+        &self.link
+    }
+
+    pub fn store_path(&self) -> Result<&StorePath, &String> {
+        self.store_path.as_ref()
+    }
+
+    pub fn is_profile(&self) -> bool {
+        let parent = self.link.parent().unwrap();
+        parent.starts_with("/nix/var/nix/profiles")
+        || parent.ends_with(".local/state/nix/profiles")
+    }
+
+    pub fn is_current(&self) -> bool {
+        self.link.starts_with("/run/current-system")
+        || self.link.starts_with("/run/booted-system")
+        || self.link.ends_with("home-manager/gcroots/current-home")
+        || self.link.ends_with("nix/flake-registry.json")
+    }
+}
 
 fn find_links(path: &PathBuf, mut links: Vec<PathBuf>) -> Result<Vec<PathBuf>, String> {
     let metadata = path.symlink_metadata()
@@ -27,29 +56,15 @@ fn find_links(path: &PathBuf, mut links: Vec<PathBuf>) -> Result<Vec<PathBuf>, S
     Ok(links)
 }
 
-pub fn gc_root_is_profile(path: &Path) -> bool {
-    let parent = path.parent().unwrap();
-    parent.starts_with("/nix/var/nix/profiles")
-    || parent.ends_with(".local/state/nix/profiles")
-}
-
-pub fn gc_root_is_current(path: &Path) -> bool {
-    path.starts_with("/run/current-system")
-    || path.starts_with("/run/booted-system")
-    || path.ends_with("home-manager/gcroots/current-home")
-    || path.ends_with("nix/flake-registry.json")
-}
-
-pub fn count_gc_deps(gc_roots: &HashMap<PathBuf, Result<StorePath, String>>) -> HashMap<StorePath, usize> {
+pub fn count_gc_deps(gc_roots: &[GCRoot]) -> HashMap<StorePath, usize> {
     let paths: Vec<_> = gc_roots.iter()
-        .filter(|(_, v)| v.is_ok())
-        .map(|(_, v)| v.as_ref().unwrap())
+        .filter_map(|r| r.store_path().ok())
         .cloned()
         .collect();
     store_paths::count_closure_paths(&paths)
 }
 
-pub fn gc_roots(include_missing: bool) -> Result<HashMap<PathBuf, Result<StorePath, String>>, String> {
+pub fn gc_roots(include_missing: bool) -> Result<Vec<GCRoot>, String> {
     let gc_roots_dir = PathBuf::from_str(GC_ROOTS_DIR)
         .map_err(|e| e.to_string())?;
     let link_locations = find_links(&gc_roots_dir, Vec::new())?;
@@ -59,10 +74,12 @@ pub fn gc_roots(include_missing: bool) -> Result<HashMap<PathBuf, Result<StorePa
         .collect();
 
 
-    let mut link_map = HashMap::new();
-    for link in links.map_err(|e| e.to_string())? {
-        link_map.insert(link.clone(), StorePath::from_symlink(&link));
+    let mut roots = Vec::new();
+    for link_path in links.map_err(|e| e.to_string())? {
+        let store_path = StorePath::from_symlink(&link_path);
+        let new = GCRoot { link: link_path, store_path };
+        roots.push(new)
     }
 
-    Ok(link_map)
+    Ok(roots)
 }

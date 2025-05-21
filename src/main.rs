@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
-use std::path::Path;
 use std::str::FromStr;
 use std::{fs, path, process};
 use colored::Colorize;
@@ -9,7 +8,7 @@ use colored::Colorize;
 use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
 use generations::Generation;
-use roots::{gc_root_is_current, gc_root_is_profile};
+use roots::GCRoot;
 use store_paths::StorePath;
 
 mod config;
@@ -321,17 +320,15 @@ fn fancy_print_generation(generation: &Generation, print_marker: bool, print_siz
     println!();
 }
 
-fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String>, print_size: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
-    let is_profile = gc_root_is_profile(link);
-    let is_current = gc_root_is_current(link);
-    let attributes = match (is_profile, is_current) {
+fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+    let attributes = match (root.is_profile(), root.is_current()) {
         (true, true) => "(profile, current)",
         (true, false) => "(profile)",
         (false, true) => "(current)",
         (false, false) => "",
     };
 
-    if let Ok(store_path) = store_path_result {
+    if let Ok(store_path) = root.store_path() {
         let size = if print_size {
             let closure_size = size::Size::from_bytes(store_path.closure_size());
 
@@ -345,11 +342,11 @@ fn fancy_print_gc_root(link: &Path, store_path_result: &Result<StorePath, String
             "".to_owned().into()
         };
 
-        println!("\n{}{} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("\n{}{} {}", root.link().to_string_lossy(), size, attributes.blue());
         println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
     } else {
         let size = if print_size { " [???]".yellow() } else { "".to_owned().into() };
-        println!("\n{}{} {}", link.to_string_lossy(), size, attributes.blue());
+        println!("\n{}{} {}", root.link().to_string_lossy(), size, attributes.blue());
         println!("{}", "  -> <not accessible>".to_string().bright_black());
     }
 
@@ -463,28 +460,27 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
 }
 
 fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
-    let roots = roots::gc_roots(args.include_missing)?;
+    let mut roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
-    let mut sorted_roots: Vec<_> = roots.into_iter().collect();
-    sorted_roots.sort_by_key(|e| e.0.clone());
+    roots.sort_by_key(|r| r.link().clone());
 
-    for (link, result) in sorted_roots {
-        if !args.include_profiles && gc_root_is_profile(&link) {
+    for root in roots {
+        if !args.include_profiles && root.is_profile() {
             continue
         }
-        if !args.include_current && gc_root_is_current(&link) {
+        if !args.include_current && root.is_current() {
             continue
         }
 
         if args.paths {
-            println!("{}", link.to_string_lossy());
+            println!("{}", root.link().to_string_lossy());
         } else if args.tsv {
-            let path = result.as_ref().map(|p| p.path().to_string_lossy().to_string())
+            let path = root.store_path().as_ref().map(|p| p.path().to_string_lossy().to_string())
                 .unwrap_or(String::from("na"));
-            println!("{}\t{}", link.to_string_lossy(), path);
+            println!("{}\t{}", root.link().to_string_lossy(), path);
         } else {
-            fancy_print_gc_root(&link, &result, !args.no_size, Some(&added_size_lookup));
+            fancy_print_gc_root(&root, !args.no_size, Some(&added_size_lookup));
         }
     }
 
@@ -496,26 +492,26 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
     let added_size_lookup = roots::count_gc_deps(&roots);
 
-    let mut sorted_roots: Vec<_> = roots.into_iter().collect();
-    sorted_roots.sort_by_key(|e| e.0.clone());
+    let mut roots: Vec<_> = roots.into_iter().collect();
+    roots.sort_by_key(|r| r.link().clone());
 
-    for (link, result) in sorted_roots {
-        if !args.include_profiles && gc_root_is_profile(&link) {
+    for root in roots {
+        if !args.include_profiles && root.is_profile() {
             continue
         }
-        if !args.include_current && gc_root_is_current(&link) {
+        if !args.include_current && root.is_current() {
             continue
         }
 
         if !args.force {
-            fancy_print_gc_root(&link, &result, !args.no_size, Some(&added_size_lookup));
+            fancy_print_gc_root(&root, !args.no_size, Some(&added_size_lookup));
         }
 
-        if result.is_err() {
+        if root.store_path().is_err() {
             ack("Cannot remove as the path is inaccessible");
         } else if args.force || ask("Remove gc root?", false) {
-            println!("-> Removing gc root '{}'", link.to_string_lossy());
-            if let Err(e) =  fs::remove_file(&link) {
+            println!("-> Removing gc root '{}'", root.link().to_string_lossy());
+            if let Err(e) =  fs::remove_file(root.link()) {
                 println!("{}", format!("Error: {}", e).red());
             }
         }
@@ -569,7 +565,7 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
         let mut buffer: Vec<u8> = Default::default();
         man.render(&mut buffer)
             .map_err(|e| e.to_string())?;
-        let file = args.directory.join(format!("nix-sweep-{}.1", subcommand.to_string()));
+        let file = args.directory.join(format!("nix-sweep-{}.1", subcommand));
         fs::write(&file, buffer)
             .map_err(|e| e.to_string())?;
         println!("Written {}", file.to_string_lossy());
