@@ -12,7 +12,7 @@ const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
 
 pub struct GCRoot {
     link: PathBuf,
-    age: Duration,
+    age: Result<Duration, String>,
     store_path: Result<StorePath, String>,
 }
 
@@ -20,12 +20,14 @@ impl GCRoot {
     fn new(link: PathBuf) -> Result<Self, String> {
         let store_path = StorePath::from_symlink(&link);
         let last_modified = fs::symlink_metadata(&link)
-            .map_err(|e| format!("Unable to get metadata for path {} ({})", link.to_string_lossy(), e))?
-            .modified()
-            .map_err(|e| format!("Unable to get metadata for path {} ({})", link.to_string_lossy(), e))?;
+            .and_then(|m| m.modified())
+            .map_err(|e| format!("Unable to get metadata for path {} ({})", link.to_string_lossy(), e));
         let now = SystemTime::now();
-        let age = now.duration_since(last_modified)
-            .map_err(|e| format!("Unable to calculate generation age ({})", e))?;
+        let age = match last_modified {
+            Ok(m) => now.duration_since(m)
+                .map_err(|e| format!("Unable to calculate generation age ({})", e)),
+            Err(e) => Err(e),
+        };
 
         Ok(GCRoot { link, age, store_path })
     }
@@ -51,12 +53,15 @@ impl GCRoot {
         || self.link.ends_with("nix/flake-registry.json")
     }
 
-    pub fn age(&self) -> Duration {
-        self.age
+    pub fn age(&self) -> Result<&Duration, &String> {
+        self.age.as_ref()
     }
 
-    pub fn age_days(&self) -> u64 {
-        self.age.as_secs() / 60 / 60 / 24
+    pub fn age_days(&self) -> Result<u64, String> {
+        match &self.age {
+            Ok(age) => Ok(age.as_secs() / 60 / 60 / 24),
+            Err(e) => Err(e.clone()),
+        }
     }
 }
 

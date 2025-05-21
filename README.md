@@ -3,7 +3,7 @@
 
 ## Example: Remove older systems generations, but keep at least 10
 ```console
-$ sudo nix-sweep cleanout --remove-older 20 --keep-min 10 system
+$ sudo nix-sweep cleanout --remove-older 20d --keep-min 10 system
 => Listing system generations
 [187]    47 days old, would remove      [21.0 GiB / 2.88 MiB]
 [188]    42 days old, would remove      [21.0 GiB / 2.88 MiB]
@@ -109,12 +109,11 @@ The following locations are checked for preset files:
 * `$XDG_CONFIG_HOME/nix-sweep/presets.toml`/`~/.config/nix-sweep/presets.toml`
 * configuration files passed via `-C`/`--config`
 
-You can generate a preset config with the `generate-preset` subcommand:
-```console
-$ nix-sweep generate-preset -p housekeeping --keep-min 10 --remove-older 14
+Example:
+```yaml
 [housekeeping]
 keep-min = 10
-remove-older = 14
+remove-older = 14d
 interactive = true
 gc = false
 ```

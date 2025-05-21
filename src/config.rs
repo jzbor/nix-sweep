@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -28,12 +28,14 @@ pub struct ConfigPreset {
     pub keep_max: Option<usize>,
 
     /// Keep all generations newer than this many days
-    #[clap(long)]
-    pub keep_newer: Option<u64>,
+    #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
+    #[serde(deserialize_with = "duration_str::deserialize_option_duration")]
+    pub keep_newer: Option<Duration>,
 
     /// Discard all generations older than this many days
-    #[clap(long)]
-    pub remove_older: Option<u64>,
+    #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
+    #[serde(deserialize_with = "duration_str::deserialize_option_duration")]
+    pub remove_older: Option<Duration>,
 
     /// Ask before removing generations or running garbage collection
     #[clap(short('n'), long("non-interactive"), action = clap::ArgAction::SetFalse)]  // this is very confusing, but works
@@ -152,14 +154,14 @@ impl ConfigPreset {
 
         let mut keep_newer = match (self.keep_newer, other.keep_newer) {
             (None, None) => None,
-            (_, Some(0)) => None,
+            (_, Some(Duration::ZERO)) => None,
             (_, Some(val)) => Some(val),
             (Some(val), None) => Some(val),
         };
 
         let mut remove_older = match (self.remove_older, other.remove_older) {
             (None, None) => None,
-            (_, Some(0)) => None,
+            (_, Some(Duration::ZERO)) => None,
             (_, Some(val)) => Some(val),
             (Some(val), None) => Some(val),
         };
@@ -213,8 +215,8 @@ impl ConfigPreset {
         ConfigPreset {
             keep_min: if let Some(0) = self.keep_min { None } else { self.keep_min },
             keep_max: if let Some(0) = self.keep_max { None } else { self.keep_max },
-            keep_newer: if let Some(0) = self.keep_newer { None } else { self.keep_newer },
-            remove_older: if let Some(0) = self.remove_older { None } else { self.remove_older },
+            keep_newer: if let Some(Duration::ZERO) = self.keep_newer { None } else { self.keep_newer },
+            remove_older: if let Some(Duration::ZERO) = self.remove_older { None } else { self.remove_older },
             interactive: self.interactive,
             _non_interactive: None,
             gc: self.gc,

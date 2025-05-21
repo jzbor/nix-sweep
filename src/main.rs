@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
 use std::str::FromStr;
+use std::time::Duration;
 use std::{fs, path, process};
 use colored::Colorize;
 
@@ -220,9 +221,9 @@ fn mark(mut generations: Vec<Generation>, config: &config::ConfigPreset) -> Vec<
     // negative criteria are applied first
 
     // mark older generations
-    if let Some(older_days) = config.remove_older {
+    if let Some(older) = config.remove_older {
         for generation in generations.iter_mut() {
-            if generation.age_days() >= older_days {
+            if generation.age() >= older {
                 generation.mark();
             }
         }
@@ -238,9 +239,9 @@ fn mark(mut generations: Vec<Generation>, config: &config::ConfigPreset) -> Vec<
     }
 
     // unmark newer generations
-    if let Some(newer_days) = config.keep_newer {
+    if let Some(newer) = config.keep_newer {
         for generation in generations.iter_mut() {
-            if generation.age_days() < newer_days {
+            if generation.age() < newer {
                 generation.unmark();
             }
         }
@@ -253,6 +254,12 @@ fn mark(mut generations: Vec<Generation>, config: &config::ConfigPreset) -> Vec<
                 generation.unmark();
             }
         }
+    }
+
+    // always unmark newest generation
+    // TODO: unmark currently activated
+    if let Some(newest) = generations.last_mut() {
+        newest.unmark()
     }
 
     generations
@@ -295,11 +302,34 @@ fn ack(question: &str) {
     }
 }
 
+fn format_duration(d: &Duration) -> String {
+    let seconds = d.as_secs();
+    let minutes = seconds / 60;
+    let hours = minutes / 60;
+    let days = hours / 24;
+    let weeks = days / 7;
+    let years = days / 365;
+
+    if minutes < 1 {
+        format!("{}s", seconds)
+    } else if hours < 1 {
+        format!("{}m", minutes)
+    } else if days < 1 {
+        format!("{}h", hours)
+    } else if years < 1 {
+        format!("{}d", days)
+    } else if years < 3 {
+        format!("{}w", weeks)
+    } else {
+        format!("{}y", years)
+    }
+}
+
 fn fancy_print_generation(generation: &Generation, print_marker: bool, print_size: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
     let marker = if generation.marked() { "would remove".red() } else { "would keep".green() };
     let id_str = format!("[{}]", generation.number()).bright_blue();
 
-    print!("{}\t {} days old", id_str, generation.age_days());
+    print!("{}\t {} old", id_str, format_duration(&generation.age()));
 
     if print_marker {
         print!(", {}", marker);
@@ -325,30 +355,37 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Optio
         (true, true) => "(profile, current)",
         (true, false) => "(profile)",
         (false, true) => "(current)",
-        (false, false) => "",
+        (false, false) => "(other)",
     };
 
-    if let Ok(store_path) = root.store_path() {
-        let size = if print_size {
+    let age = match root.age() {
+        Ok(age) => format!("{}", format_duration(age)),
+        Err(_) => String::from(""),
+    };
+
+    let (store_path, size) = if let Ok(store_path) = root.store_path() {
+        let store_path_str = store_path.path().to_string_lossy().into();
+        if print_size {
             let closure_size = size::Size::from_bytes(store_path.closure_size());
 
             if let Some(occurences) = added_size_lookup {
                 let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
-                format!(" [{} / {}]", closure_size, added_size).yellow()
+                (store_path_str, format!("[{} / {}]", closure_size, added_size).yellow())
             } else {
-                format!(" [{}]", closure_size).yellow()
+                (store_path_str, format!("[{}]", closure_size).yellow().into())
             }
         } else {
-            "".to_owned().into()
-        };
-
-        println!("\n{}{} {}", root.link().to_string_lossy(), size, attributes.blue());
-        println!("{}", format!("  -> {}", store_path.path().to_string_lossy()).bright_black());
+            (store_path_str, "".to_owned().into())
+        }
     } else {
-        let size = if print_size { " [???]".yellow() } else { "".to_owned().into() };
-        println!("\n{}{} {}", root.link().to_string_lossy(), size, attributes.blue());
-        println!("{}", "  -> <not accessible>".to_string().bright_black());
-    }
+        (String::from("<not accessible>"), "[???]".yellow())
+    };
+
+    let size = if size != "".into() { format!(" {}", size).into() } else { size };
+
+    println!("\n{}{}", root.link().to_string_lossy(), size);
+    println!("{}", format!("  -> {}", store_path).bright_black());
+    println!("{}", format!("  age: {}, type: {}", age.bright_blue(), attributes.blue()));
 
 }
 
@@ -389,7 +426,7 @@ fn list_generations(generations: &[Generation], profile_type: &ProfileType, prin
 fn remove_generations(generations: &[Generation], profile_type: &ProfileType) {
     announce_removal(profile_type);
     for gen in generations {
-        let age_str = if gen.age_days() == 1 { "1 day old".to_owned() } else { format!("{} days old", gen.age_days()) };
+        let age_str = format_duration(&gen.age());
         if gen.marked() {
             println!("{}", format!("-> Removing generation {} ({})", gen.number(), age_str).bright_blue());
             resolve(gen.remove());
@@ -477,7 +514,7 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
             println!("{}", root.link().to_string_lossy());
         } else if args.tsv {
             let path = root.store_path().as_ref().map(|p| p.path().to_string_lossy().to_string())
-                .unwrap_or(String::from("na"));
+                .unwrap_or(String::from("n/a"));
             println!("{}\t{}", root.link().to_string_lossy(), path);
         } else {
             fancy_print_gc_root(&root, !args.no_size, Some(&added_size_lookup));
