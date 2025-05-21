@@ -46,10 +46,10 @@ enum Subcommand {
     /// Run garbage collection (short for `nix-store --gc`)
     GC(GCArgs),
 
-    /// Print out gc roots
+    /// List garbage collection roots
     GCRoots(GCRootsArgs),
 
-    /// Print out gc roots
+    /// List profile generations
     Generations(GenerationsArgs),
 
     /// Generate a TOML preset config to use with `nix-sweep cleanout`
