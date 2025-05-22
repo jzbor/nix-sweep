@@ -29,7 +29,8 @@ pub struct Generation {
 
 impl Profile {
     pub fn new(parent: PathBuf, name: String) -> Result<Self, String> {
-        let full_path = parent.with_file_name(&name);
+        let mut full_path = parent.clone();
+        full_path.push(&name);
         if !fs::exists(&full_path)
             .map_err(|e| format!("Unable to check path {} ({})", full_path.to_string_lossy(), e))? {
             return Err(format!("Could not find profile '{}'", full_path.to_string_lossy()));
@@ -145,7 +146,9 @@ impl Profile {
     }
 
     pub fn path(&self) -> PathBuf {
-        self.parent.with_file_name(&self.name)
+        let mut path = self.parent.clone();
+        path.push(&self.name);
+        path
     }
 
     pub fn generations(&self) -> &[Generation] {
