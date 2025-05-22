@@ -53,6 +53,7 @@ enum Subcommand {
     Generations(GenerationsArgs),
 
     /// Generate a TOML preset config to use with `nix-sweep cleanout`
+    #[clap(hide(true))]
     GeneratePreset(GeneratePresetArgs),
 
     /// Selectively remove gc roots
