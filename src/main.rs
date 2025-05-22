@@ -9,6 +9,7 @@ use colored::Colorize;
 use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
 use generations::Generation;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use roots::GCRoot;
 use store_paths::StorePath;
 
@@ -424,6 +425,40 @@ fn list_generations(generations: &[Generation], profile_type: &ProfileType, prin
     for gen in generations {
         fancy_print_generation(gen, true, print_size, Some(&added_size_lookup));
     }
+
+    if print_size {
+        let mut paths: Vec<_> = store_paths.par_iter()
+            .flat_map(|sp| sp.closure())
+            .flatten()
+            .collect();
+        let mut kept_paths: Vec<_> = generations.par_iter()
+            .filter(|g| !g.marked())
+            .flat_map(|g| g.store_path())
+            .flat_map(|sp| sp.closure())
+            .flatten()
+            .collect();
+
+        paths.sort_by_key(|p| p.path().clone());
+        paths.dedup_by_key(|p| p.path().clone());
+
+        kept_paths.sort_by_key(|p| p.path().clone());
+        kept_paths.dedup_by_key(|p| p.path().clone());
+
+        let size: u64 = paths.iter()
+            .map(|c| c.size())
+            .sum();
+
+        let kept_size: u64 = kept_paths.iter()
+            .map(|c| c.size())
+            .sum();
+
+        println!();
+        println!("Estimated total size: {} ({} store paths)",
+            size::Size::from_bytes(size), paths.len());
+        println!("  -> after removal:   {} ({} store paths)",
+            size::Size::from_bytes(kept_size), kept_paths.len());
+    }
+
     println!();
 }
 
@@ -432,10 +467,10 @@ fn remove_generations(generations: &[Generation], profile_type: &ProfileType) {
     for gen in generations {
         let age_str = format_duration(&gen.age());
         if gen.marked() {
-            println!("{}", format!("-> Removing generation {} ({})", gen.number(), age_str).bright_blue());
+            println!("{}", format!("-> Removing generation {} ({} old)", gen.number(), age_str).bright_blue());
             resolve(gen.remove());
         } else {
-            println!("{}", format!("-> Keeping generation {} ({})", gen.number(), age_str).bright_black());
+            println!("{}", format!("-> Keeping generation {} ({} old)", gen.number(), age_str).bright_black());
         }
     }
     println!();
