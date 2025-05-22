@@ -359,10 +359,9 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Optio
         (false, false) => "(other)",
     };
 
-    let age = match root.age() {
-        Ok(age) => format!("{}", format_duration(age)),
-        Err(_) => String::from(""),
-    };
+    let age = root.age()
+        .ok()
+        .map(format_duration);
 
     let (store_path, size) = if let Ok(store_path) = root.store_path() {
         let store_path_str = store_path.path().to_string_lossy().into();
@@ -373,7 +372,7 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Optio
                 let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
                 (store_path_str, format!("[{} / {}]", closure_size, added_size).yellow())
             } else {
-                (store_path_str, format!("[{}]", closure_size).yellow().into())
+                (store_path_str, format!("[{}]", closure_size).yellow())
             }
         } else {
             (store_path_str, "".to_owned().into())
@@ -386,7 +385,11 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Optio
 
     println!("\n{}{}", root.link().to_string_lossy(), size);
     println!("{}", format!("  -> {}", store_path).bright_black());
-    println!("{}", format!("  age: {}, type: {}", age.bright_blue(), attributes.blue()));
+    if let Some(age) = age {
+        println!("  age: {}, type: {}", age.bright_blue(), attributes.blue());
+    } else {
+        println!("  type: {}", attributes.blue());
+    }
 
 }
 
@@ -522,7 +525,9 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
         }
     }
 
-    println!();
+    if !args.paths && !args.tsv {
+        println!();
+    }
     Ok(())
 }
 

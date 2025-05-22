@@ -71,10 +71,6 @@ impl Generation {
         self.age
     }
 
-    pub fn age_days(&self) -> u64 {
-        self.age.as_secs() / 60 / 60 / 24
-    }
-
     pub fn mark(&mut self) {
         self.marker = true;
     }

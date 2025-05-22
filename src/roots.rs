@@ -56,13 +56,6 @@ impl GCRoot {
     pub fn age(&self) -> Result<&Duration, &String> {
         self.age.as_ref()
     }
-
-    pub fn age_days(&self) -> Result<u64, String> {
-        match &self.age {
-            Ok(age) => Ok(age.as_secs() / 60 / 60 / 24),
-            Err(e) => Err(e.clone()),
-        }
-    }
 }
 
 fn find_links(path: &PathBuf, mut links: Vec<PathBuf>) -> Result<Vec<PathBuf>, String> {
