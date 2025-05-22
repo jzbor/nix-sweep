@@ -8,14 +8,14 @@ use colored::Colorize;
 
 use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
-use generations::Generation;
+use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use roots::GCRoot;
 use store_paths::StorePath;
 
 mod config;
 mod gc;
-mod generations;
+mod profiles;
 mod store_paths;
 mod roots;
 
@@ -219,54 +219,6 @@ fn resolve<T, E: Display>(result: Result<T, E>) -> T {
     }
 }
 
-fn mark(mut generations: Vec<Generation>, config: &config::ConfigPreset) -> Vec<Generation>{
-    // negative criteria are applied first
-
-    // mark older generations
-    if let Some(older) = config.remove_older {
-        for generation in generations.iter_mut() {
-            if generation.age() >= older {
-                generation.mark();
-            }
-        }
-    }
-
-    // mark superfluous generations
-    if let Some(max) = config.keep_max {
-        for (i, generation) in generations.iter_mut().rev().enumerate() {
-            if i >= max {
-                generation.mark();
-            }
-        }
-    }
-
-    // unmark newer generations
-    if let Some(newer) = config.keep_newer {
-        for generation in generations.iter_mut() {
-            if generation.age() < newer {
-                generation.unmark();
-            }
-        }
-    }
-
-    // unmark kept generations
-    if let Some(min) = config.keep_min {
-        for (i, generation) in generations.iter_mut().rev().enumerate() {
-            if i < min {
-                generation.unmark();
-            }
-        }
-    }
-
-    // always unmark newest generation
-    // TODO: unmark currently activated
-    if let Some(newest) = generations.last_mut() {
-        newest.unmark()
-    }
-
-    generations
-}
-
 fn ask(question: &str, default: bool) -> bool {
     loop {
         match default {
@@ -394,35 +346,23 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Optio
 
 }
 
-fn announce_listing(profile_type: &ProfileType) {
-    use ProfileType::*;
-    match profile_type {
-        User() => println!("{}", "=> Listing user profile generations".to_string().green()),
-        Home() => println!("{}", "=> Listing home-manager generations".to_string().green()),
-        System() => println!("{}", "=> Listing system generations".to_string().green()),
-        Custom(path) => println!("{}", format!("=> Listing generations for profile {}", path.to_string_lossy()).to_string().green()),
-    }
+fn announce_listing(profile: &Profile) {
+    println!("{}", format!("=> Listing generations for profile {}", profile.path().to_string_lossy()).to_string().green());
 }
 
-fn announce_removal(profile_type: &ProfileType) {
-    use ProfileType::*;
-    match profile_type {
-        User() => println!("\n{}", "=> Removing old user profile generations".to_string().green()),
-        Home() => println!("\n{}", "=> Removing old home-manager generations".to_string().green()),
-        System() => println!("\n{}", "=> Removing old system generations".to_string().green()),
-        Custom(path) => println!("\n{}", format!("=> Removing old generations for profile {}", path.to_string_lossy()).to_string().green()),
-    }
+fn announce_removal(profile: &Profile) {
+    format!("=> Removing old generations for profile {}", profile.path().to_string_lossy()).to_string().green();
 }
 
-fn list_generations(generations: &[Generation], profile_type: &ProfileType, print_size: bool) {
-    announce_listing(profile_type);
+fn list_generations(profile: &Profile, print_size: bool) {
+    announce_listing(profile);
 
-    let store_paths: Vec<_> = generations.iter()
+    let store_paths: Vec<_> = profile.generations().iter()
         .flat_map(|g| g.store_path())
         .collect();
     let added_size_lookup = store_paths::count_closure_paths(&store_paths);
 
-    for gen in generations {
+    for gen in profile.generations() {
         fancy_print_generation(gen, true, print_size, Some(&added_size_lookup));
     }
 
@@ -431,7 +371,7 @@ fn list_generations(generations: &[Generation], profile_type: &ProfileType, prin
             .flat_map(|sp| sp.closure())
             .flatten()
             .collect();
-        let mut kept_paths: Vec<_> = generations.par_iter()
+        let mut kept_paths: Vec<_> = profile.generations().par_iter()
             .filter(|g| !g.marked())
             .flat_map(|g| g.store_path())
             .flat_map(|sp| sp.closure())
@@ -462,9 +402,9 @@ fn list_generations(generations: &[Generation], profile_type: &ProfileType, prin
     println!();
 }
 
-fn remove_generations(generations: &[Generation], profile_type: &ProfileType) {
-    announce_removal(profile_type);
-    for gen in generations {
+fn remove_generations(profile: &Profile) {
+    announce_removal(profile);
+    for gen in profile.generations() {
         let age_str = format_duration(&gen.age());
         if gen.marked() {
             println!("{}", format!("-> Removing generation {} ({} old)", gen.number(), age_str).bright_blue());
@@ -476,13 +416,13 @@ fn remove_generations(generations: &[Generation], profile_type: &ProfileType) {
     println!();
 }
 
-fn get_generations(profile_type: &ProfileType) -> Result<Vec<Generation>, String> {
+fn get_profile(profile_type: &ProfileType) -> Result<Profile, String> {
     use ProfileType::*;
     match profile_type {
-        Home() => generations::home_generations(),
-        User() => generations::user_generations(),
-        System() => generations::system_generations(),
-        Custom(path) => generations::generations_from_path(path),
+        Home() => Profile::home(),
+        User() => Profile::user(),
+        System() => Profile::system(),
+        Custom(path) => Profile::from_path(path.to_owned()),
     }
 }
 
@@ -508,22 +448,22 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
     // println!("{:#?}", config);
 
     for profile_str in args.profiles {
-        let profile = ProfileType::from_str(&profile_str)?;
-        let generations = mark(get_generations(&profile)?, &config);
+        let mut profile = get_profile(&ProfileType::from_str(&profile_str)?)?;
+        profile.mark(&config);
 
         if args.dry_run {
-            list_generations(&generations, &profile, !args.no_size);
+            list_generations(&profile, !args.no_size);
         } else if interactive {
-            list_generations(&generations, &profile, !args.no_size);
+            list_generations(&profile, !args.no_size);
 
             let confirmation = ask("Do you want to delete the marked generations?", false);
             if confirmation {
-            remove_generations(&generations, &profile);
+            remove_generations(&profile);
             } else {
                 println!("-> Not touching profile\n");
             }
         } else {
-            remove_generations(&generations, &profile);
+            remove_generations(&profile);
         }
     }
 
@@ -603,15 +543,14 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
 
 fn cmd_generations(args: GenerationsArgs) -> Result<(), String> {
     for profile_str in args.profiles {
-        let profile = ProfileType::from_str(&profile_str)?;
-        let generations = get_generations(&profile)?;
+        let profile = get_profile(&ProfileType::from_str(&profile_str)?)?;
 
         if args.paths {
-            for gen in generations {
+            for gen in profile.generations() {
                 println!("{}", gen.path().to_string_lossy());
             }
         } else {
-            list_generations(&generations, &profile, !args.no_size);
+            list_generations(&profile, !args.no_size);
         }
     }
 
