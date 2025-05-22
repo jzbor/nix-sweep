@@ -354,7 +354,7 @@ fn announce_removal(profile: &Profile) {
     format!("=> Removing old generations for profile {}", profile.path().to_string_lossy()).to_string().green();
 }
 
-fn list_generations(profile: &Profile, print_size: bool) {
+fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
     announce_listing(profile);
 
     let store_paths: Vec<_> = profile.generations().iter()
@@ -363,7 +363,7 @@ fn list_generations(profile: &Profile, print_size: bool) {
     let added_size_lookup = store_paths::count_closure_paths(&store_paths);
 
     for gen in profile.generations() {
-        fancy_print_generation(gen, true, print_size, Some(&added_size_lookup));
+        fancy_print_generation(gen, print_markers, print_size, Some(&added_size_lookup));
     }
 
     if print_size {
@@ -395,8 +395,10 @@ fn list_generations(profile: &Profile, print_size: bool) {
         println!();
         println!("Estimated total size: {} ({} store paths)",
             size::Size::from_bytes(size), paths.len());
-        println!("  -> after removal:   {} ({} store paths)",
-            size::Size::from_bytes(kept_size), kept_paths.len());
+        if print_markers {
+            println!("  -> after removal:   {} ({} store paths)",
+                size::Size::from_bytes(kept_size), kept_paths.len());
+        }
     }
 
     println!();
@@ -452,9 +454,9 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
         profile.mark(&config);
 
         if args.dry_run {
-            list_generations(&profile, !args.no_size);
+            list_generations(&profile, !args.no_size, true);
         } else if interactive {
-            list_generations(&profile, !args.no_size);
+            list_generations(&profile, !args.no_size, true);
 
             let confirmation = ask("Do you want to delete the marked generations?", false);
             if confirmation {
@@ -550,7 +552,7 @@ fn cmd_generations(args: GenerationsArgs) -> Result<(), String> {
                 println!("{}", gen.path().to_string_lossy());
             }
         } else {
-            list_generations(&profile, !args.no_size);
+            list_generations(&profile, !args.no_size, false);
         }
     }
 
