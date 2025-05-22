@@ -286,12 +286,10 @@ fn format_duration(d: &Duration) -> String {
         } else {
             format!("{} weeks", weeks)
         }
+    } else if years == 1 {
+        String::from("1 year")
     } else {
-        if years == 1 {
-            String::from("1 year")
-        } else {
-            format!("{} years", years)
-        }
+        format!("{} years", years)
     }
 }
 
@@ -343,8 +341,6 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool) {
     } else {
         (String::from("<not accessible>"), None)
     };
-
-    // let size = if size != "".into() { format!(" {}", size).into() } else { size };
 
     println!("\n{}", root.link().to_string_lossy());
     println!("{}", format!("  -> {}", store_path).bright_black());

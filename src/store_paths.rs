@@ -11,6 +11,7 @@ use rayon::prelude::*;
 static STORE_PATH_SIZE_CACHE: RwLock<Option<HashMap<PathBuf, u64>>> = RwLock::new(None);
 static CLOSURE_CACHE: RwLock<Option<HashMap<StorePath, Vec<StorePath>>>> = RwLock::new(None);
 
+
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct StorePath(PathBuf);
 
