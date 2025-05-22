@@ -1,10 +1,10 @@
 use std::time::Duration;
-use std::{collections::HashMap, time::SystemTime};
+use std::time::SystemTime;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::store_paths::{self, StorePath};
+use crate::store_paths::StorePath;
 
 
 const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
@@ -75,14 +75,6 @@ fn find_links(path: &PathBuf, mut links: Vec<PathBuf>) -> Result<Vec<PathBuf>, S
     }
 
     Ok(links)
-}
-
-pub fn count_gc_deps(gc_roots: &[GCRoot]) -> HashMap<StorePath, usize> {
-    let paths: Vec<_> = gc_roots.iter()
-        .filter_map(|r| r.store_path().ok())
-        .cloned()
-        .collect();
-    store_paths::count_closure_paths(&paths)
 }
 
 pub fn gc_roots(include_missing: bool) -> Result<Vec<GCRoot>, String> {

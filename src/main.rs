@@ -265,17 +265,33 @@ fn format_duration(d: &Duration) -> String {
     let years = days / 365;
 
     if minutes < 1 {
-        format!("{}s", seconds)
+        format!("{} sec", seconds)
     } else if hours < 1 {
-        format!("{}m", minutes)
+        format!("{} min", minutes)
     } else if days < 1 {
-        format!("{}h", hours)
+        if hours == 1 {
+            String::from("1 hour")
+        } else {
+            format!("{} hours", hours)
+        }
     } else if years < 1 {
-        format!("{}d", days)
+        if days == 1 {
+            String::from("1 day")
+        } else {
+            format!("{} days", days)
+        }
     } else if years < 3 {
-        format!("{}w", weeks)
+        if weeks == 1 {
+            String::from("1 week")
+        } else {
+            format!("{} weeks", weeks)
+        }
     } else {
-        format!("{}y", years)
+        if years == 1 {
+            String::from("1 year")
+        } else {
+            format!("{} years", years)
+        }
     }
 }
 
@@ -304,7 +320,7 @@ fn fancy_print_generation(generation: &Generation, print_marker: bool, print_siz
     println!();
 }
 
-fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+fn fancy_print_gc_root(root: &GCRoot, print_size: bool) {
     let attributes = match (root.is_profile(), root.is_current()) {
         (true, true) => "(profile, current)",
         (true, false) => "(profile)",
@@ -320,30 +336,29 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool, added_size_lookup: Optio
         let store_path_str = store_path.path().to_string_lossy().into();
         if print_size {
             let closure_size = size::Size::from_bytes(store_path.closure_size());
-
-            if let Some(occurences) = added_size_lookup {
-                let added_size = size::Size::from_bytes(store_path.added_closure_size(occurences));
-                (store_path_str, format!("[{} / {}]", closure_size, added_size).yellow())
-            } else {
-                (store_path_str, format!("[{}]", closure_size).yellow())
-            }
+            (store_path_str, Some(closure_size))
         } else {
-            (store_path_str, "".to_owned().into())
+            (store_path_str, None)
         }
     } else {
-        (String::from("<not accessible>"), "[???]".yellow())
+        (String::from("<not accessible>"), None)
     };
 
-    let size = if size != "".into() { format!(" {}", size).into() } else { size };
+    // let size = if size != "".into() { format!(" {}", size).into() } else { size };
 
-    println!("\n{}{}", root.link().to_string_lossy(), size);
+    println!("\n{}", root.link().to_string_lossy());
     println!("{}", format!("  -> {}", store_path).bright_black());
+    print!("  ");
     if let Some(age) = age {
-        println!("  age: {}, type: {}", age.bright_blue(), attributes.blue());
-    } else {
-        println!("  type: {}", attributes.blue());
+        print!("age: {}, ", age.bright_blue());
     }
-
+    if print_size {
+        match size {
+            Some(size) => print!("size: {}, ", size.to_string().yellow()),
+            None => print!("size: {}, ", "n/a".to_string().yellow()),
+        }
+    }
+    println!("type: {}", attributes.blue());
 }
 
 fn announce_listing(profile: &Profile) {
@@ -394,10 +409,10 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
 
         println!();
         println!("Estimated total size: {} ({} store paths)",
-            size::Size::from_bytes(size), paths.len());
+            size::Size::from_bytes(size).to_string().yellow(), paths.len());
         if print_markers {
             println!("  -> after removal:   {} ({} store paths)",
-                size::Size::from_bytes(kept_size), kept_paths.len());
+                size::Size::from_bytes(kept_size).to_string().green(), kept_paths.len());
         }
     }
 
@@ -479,7 +494,6 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
 
 fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     let mut roots = roots::gc_roots(args.include_missing)?;
-    let added_size_lookup = roots::count_gc_deps(&roots);
 
     roots.sort_by_key(|r| r.link().clone());
 
@@ -498,7 +512,7 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
                 .unwrap_or(String::from("n/a"));
             println!("{}\t{}", root.link().to_string_lossy(), path);
         } else {
-            fancy_print_gc_root(&root, !args.no_size, Some(&added_size_lookup));
+            fancy_print_gc_root(&root, !args.no_size);
         }
     }
 
@@ -510,7 +524,6 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
 
 fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
-    let added_size_lookup = roots::count_gc_deps(&roots);
 
     let mut roots: Vec<_> = roots.into_iter().collect();
     roots.sort_by_key(|r| r.link().clone());
@@ -524,7 +537,7 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
         }
 
         if !args.force {
-            fancy_print_gc_root(&root, !args.no_size, Some(&added_size_lookup));
+            fancy_print_gc_root(&root, !args.no_size);
         }
 
         if root.store_path().is_err() {
