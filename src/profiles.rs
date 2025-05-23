@@ -7,10 +7,15 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::time::SystemTime;
 
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+
 use crate::config;
+use crate::roots::gc_roots;
 use crate::store_paths::StorePath;
 
 
+#[derive(Debug)]
 pub struct Profile {
     parent: PathBuf,
     name: String,
@@ -152,6 +157,49 @@ impl Profile {
         &self.generations
     }
 
+    pub fn full_closure(&self) -> Result<Vec<StorePath>, String> {
+        let closures: Result<Vec<_>, _> = self.generations.par_iter()
+            .map(|g| g.closure())
+            .collect();
+        let mut full_closure: Vec<_> = closures?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        full_closure.sort_by_key(|p| p.path().clone());
+        full_closure.dedup();
+
+        Ok(full_closure)
+    }
+
+    pub fn from_gc_roots() -> Result<Vec<Profile>, String> {
+        let links: Option<Vec<_>> = gc_roots(false)?.into_iter()
+            .filter(|r| r.is_profile())
+            .map(|r| r.link().to_str().map(|s| s.to_owned()))
+            .collect();
+        let mut paths: Vec<_> = links.ok_or(String::from("Unable to format gc root link"))?
+            .iter()
+            .flat_map(|l| {
+                let mut s = match l.strip_suffix("-link") {
+                    Some(rem) => rem.to_string(),
+                    None => return None,
+                };
+
+                while let Some(last) = s.pop() {
+                    if !last.is_numeric() {
+                        if last == '-' { return Some(s); } else { return None; }
+                    }
+                }
+                None
+            }).collect();
+
+        paths.sort();
+        paths.dedup();
+
+        paths.into_iter()
+            .map(|p| Profile::from_path(PathBuf::from(p)))
+            .collect()
+    }
 }
 
 impl Generation {
@@ -217,6 +265,10 @@ impl Generation {
 
     pub fn marked(&self) -> bool{
         self.marker
+    }
+
+    pub fn closure(&self) -> Result<Vec<StorePath>, String> {
+        self.store_path().and_then(|sp| sp.closure())
     }
 
     pub fn remove(&self) -> Result<(), String> {

@@ -37,6 +37,9 @@ pub struct Args {
 
 #[derive(Clone, Debug, clap::Subcommand)]
 enum Subcommand {
+    /// Analyze store usage
+    Analyze(AnalyzeArgs),
+
     /// Clean out old profiles
     ///
     /// Positive criteria (e.g. --keep-min, --keep-newer) are prioritized over negative ones
@@ -90,6 +93,9 @@ struct CleanoutArgs {
     #[clap(required = true)]
     profiles: Vec<String>,
 }
+
+#[derive(Clone, Debug, clap::Args)]
+struct AnalyzeArgs {}
 
 #[derive(Clone, Debug, clap::Args)]
 struct GCArgs {
@@ -602,6 +608,73 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
     Ok(())
 }
 
+fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
+    eprintln!("Indexing store...");
+    let all_paths = StorePath::all_paths()?;
+    let total_size: u64 = all_paths.iter()
+        .map(|sp| sp.size())
+        .sum();
+
+    eprintln!("Indexing profiles...");
+    let profiles = Profile::from_gc_roots()?;
+    let mut sorted_profiles = Vec::new();
+    for profile in profiles {
+        let size: u64 = profile.full_closure()?
+            .iter()
+            .map(|p| p.size())
+            .sum();
+        sorted_profiles.push((profile, size));
+    }
+    sorted_profiles.sort_by_key(|(_, s)| *s);
+    sorted_profiles.reverse();
+
+    eprintln!("Indexing gc roots...");
+    let gc_roots: Vec<_> = roots::gc_roots(false)?
+        .into_iter()
+        .filter(|r| !r.is_profile() && !r.is_current() && r.store_path().is_ok())
+        .collect();
+    let mut sorted_gc_roots = Vec::new();
+    for root in gc_roots {
+        let size: u64 = root.store_path().unwrap()
+            .closure_size();
+        sorted_gc_roots.push((root, size));
+    }
+    sorted_gc_roots.sort_by_key(|(_, s)| *s);
+    sorted_gc_roots.reverse();
+
+
+    eprintln!();
+    println!("{} {}",
+        "Total store size:".green(),
+        size::Size::from_bytes(total_size).to_string().yellow()
+    );
+
+    println!();
+    println!("{}", "=> Profiles:".green());
+
+    for (profile, size) in sorted_profiles {
+        let percentage = 100 * size / total_size;
+        println!("{:<50}\t{} ({}%)\t{}",
+            profile.path().to_string_lossy(),
+            size::Size::from_bytes(size).to_string().yellow(),
+            percentage,
+            format!("[{} generations]", profile.generations().len()).bright_blue(),
+        );
+    }
+
+    println!();
+    println!("{}", "=> GC Roots:".green());
+    for (root, size) in sorted_gc_roots {
+        let percentage = 100 * size / total_size;
+        println!("{:<50}\t{} ({}%)",
+            root.link().to_string_lossy(),
+            size::Size::from_bytes(size).to_string().yellow(),
+            percentage);
+    }
+
+    Ok(())
+}
+
 fn main() {
     let config = Args::parse();
 
@@ -614,6 +687,7 @@ fn main() {
         Generations(args) => cmd_generations(args),
         GeneratePreset(args) => cmd_generate_preset(args),
         Man(args) => cmd_man(args),
+        Analyze(args) => cmd_analyze(args),
     };
     resolve(res);
 }
