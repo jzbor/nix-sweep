@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
@@ -219,10 +220,14 @@ fn resolve<T, E: Display>(result: Result<T, E>) -> T {
     match result {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("{} {}", "Error:".red(), e);
             process::exit(1)
         },
     }
+}
+
+fn warn(warning: &str) {
+    eprintln!("{} {}", "Warning:".yellow(), warning);
 }
 
 fn ask(question: &str, default: bool) -> bool {
@@ -496,8 +501,8 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
 
 fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     let mut roots = roots::gc_roots(args.include_missing)?;
-
     roots.sort_by_key(|r| r.link().clone());
+    roots.sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
     for root in roots {
         if !args.include_profiles && root.is_profile() {
@@ -529,6 +534,7 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
 
     let mut roots: Vec<_> = roots.into_iter().collect();
     roots.sort_by_key(|r| r.link().clone());
+    roots.sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
     for root in roots {
         if !args.include_profiles && root.is_profile() {
@@ -543,7 +549,11 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
         }
 
         if root.store_path().is_err() {
-            ack("Cannot remove as the path is inaccessible");
+            if args.force {
+                warn(&format!("Cannot remove as the path is inaccessible: {}", root.link().to_string_lossy()))
+            } else {
+                ack("Cannot remove as the path is inaccessible");
+            }
         } else if args.force || ask("Remove gc root?", false) {
             println!("-> Removing gc root '{}'", root.link().to_string_lossy());
             if let Err(e) =  fs::remove_file(root.link()) {
@@ -625,8 +635,7 @@ fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
             .sum();
         sorted_profiles.push((profile, size));
     }
-    sorted_profiles.sort_by_key(|(_, s)| *s);
-    sorted_profiles.reverse();
+    sorted_profiles.sort_by_key(|(_, s)| Reverse(*s));
 
     eprintln!("Indexing gc roots...");
     let gc_roots: Vec<_> = roots::gc_roots(false)?
@@ -639,8 +648,7 @@ fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
             .closure_size();
         sorted_gc_roots.push((root, size));
     }
-    sorted_gc_roots.sort_by_key(|(_, s)| *s);
-    sorted_gc_roots.reverse();
+    sorted_gc_roots.sort_by_key(|(_, s)| Reverse(*s));
 
 
     eprintln!();
