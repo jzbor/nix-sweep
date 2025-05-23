@@ -304,7 +304,8 @@ fn format_duration(d: &Duration) -> String {
     }
 }
 
-fn fancy_print_generation(generation: &Generation, print_marker: bool, print_size: bool, added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+fn fancy_print_generation(generation: &Generation, profile: &Profile, print_marker: bool, print_size: bool,
+        added_size_lookup: Option<&HashMap<StorePath, usize>>) {
     let marker = if generation.marked() { "would remove".red() } else { "would keep".green() };
     let id_str = format!("[{}]", generation.number()).bright_blue();
 
@@ -326,6 +327,11 @@ fn fancy_print_generation(generation: &Generation, print_marker: bool, print_siz
             print!(" \t{}", size);
         }
     }
+
+    if profile.is_active_generation(generation) {
+        print!("\t(active)");
+    }
+
     println!();
 }
 
@@ -356,8 +362,9 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool) {
     println!("\n{}", root.link().to_string_lossy());
     println!("{}", format!("  -> {}", store_path).bright_black());
     print!("  ");
-    if let Some(age) = age {
-        print!("age: {}, ", age.bright_blue());
+    match age {
+        Some(age) => print!("age: {}, ", age.bright_blue()),
+        None => print!("age: {}, ", "n/a".bright_blue()),
     }
     if print_size {
         match size {
@@ -385,7 +392,7 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
     let added_size_lookup = store_paths::count_closure_paths(&store_paths);
 
     for gen in profile.generations() {
-        fancy_print_generation(gen, print_markers, print_size, Some(&added_size_lookup));
+        fancy_print_generation(gen, profile, print_markers, print_size, Some(&added_size_lookup));
     }
 
     if print_size {
@@ -473,7 +480,7 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
 
     for profile_str in args.profiles {
         let mut profile = get_profile(&ProfileType::from_str(&profile_str)?)?;
-        profile.mark(&config);
+        profile.apply_markers(&config);
 
         if args.dry_run {
             list_generations(&profile, !args.no_size, true);

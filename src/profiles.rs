@@ -103,7 +103,7 @@ impl Profile {
         Self::new_user_profile(String::from("profile"))
     }
 
-    pub fn mark(&mut self, config: &config::ConfigPreset) {
+    pub fn apply_markers(&mut self, config: &config::ConfigPreset) {
         // negative criteria are applied first
 
         // mark older generations
@@ -143,9 +143,13 @@ impl Profile {
         }
 
         // always unmark newest generation
-        // TODO: unmark currently activated
         if let Some(newest) = self.generations.last_mut() {
             newest.unmark()
+        }
+
+        // always unmark currently active generation
+        if let Ok(active) = self.active_generation_mut() {
+            active.unmark()
         }
     }
 
@@ -155,6 +159,36 @@ impl Profile {
 
     pub fn generations(&self) -> &[Generation] {
         &self.generations
+    }
+
+    pub fn active_generation(&self) -> Result<&Generation, String> {
+        let gen_name = fs::read_link(self.path())
+            .map(|p| p.to_path_buf())
+            .map_err(|e| e.to_string())?;
+        let gen_path = self.parent.join(gen_name);
+
+        self.generations.iter()
+            .find(|g| g.path() == gen_path)
+            .ok_or("Cannot find current generation".to_owned())
+    }
+
+    pub fn active_generation_mut(&mut self) -> Result<&mut Generation, String> {
+        let gen_name = fs::read_link(self.path())
+            .map(|p| p.to_path_buf())
+            .map_err(|e| e.to_string())?;
+        let gen_path = self.parent.join(gen_name);
+
+        self.generations.iter_mut()
+            .find(|g| g.path() == gen_path)
+            .ok_or("Cannot find current generation".to_owned())
+    }
+
+    pub fn is_active_generation(&self, generation: &Generation) -> bool {
+        let active = match self.active_generation() {
+            Ok(gen) => gen,
+            Err(_) => return false,
+        };
+        active == generation
     }
 
     pub fn full_closure(&self) -> Result<Vec<StorePath>, String> {
