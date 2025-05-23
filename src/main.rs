@@ -647,14 +647,17 @@ fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing gc roots...");
     let gc_roots: Vec<_> = roots::gc_roots(false)?
         .into_iter()
-        .filter(|r| !r.is_profile() && !r.is_current() && r.store_path().is_ok())
+        .filter(|r| !r.is_profile() && !r.is_current())
         .collect();
     let mut sorted_gc_roots = Vec::new();
     for root in gc_roots {
-        let size: u64 = root.store_path().unwrap()
-            .closure_size();
-        sorted_gc_roots.push((root, size));
+        let item = match root.store_path().cloned() {
+            Ok(path) => (root, Some(path.closure_size())),
+            Err(_) => (root, None),
+        };
+        sorted_gc_roots.push(item);
     }
+    sorted_gc_roots.sort_by_key(|(p, _)| p.link().clone());
     sorted_gc_roots.sort_by_key(|(_, s)| Reverse(*s));
 
 
@@ -680,11 +683,18 @@ fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
     println!();
     println!("{}", "=> GC Roots:".green());
     for (root, size) in sorted_gc_roots {
-        let percentage = 100 * size / total_size;
-        println!("{:<50}\t{} ({}%)",
+        let size_str = match size {
+            Some(size) => size::Size::from_bytes(size).to_string(),
+            None => "n/a".to_owned(),
+        };
+        let percentage_str = match size {
+            Some(size) => format!("{}%", 100 * size / total_size),
+            None => "n/a".to_owned(),
+        };
+        println!("{:<50}\t{} ({})",
             root.link().to_string_lossy(),
-            size::Size::from_bytes(size).to_string().yellow(),
-            percentage);
+            size_str.yellow(),
+            percentage_str);
     }
 
     Ok(())
