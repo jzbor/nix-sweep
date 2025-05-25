@@ -158,6 +158,12 @@ struct GCRootsArgs {
     #[clap(short, long)]
     exclude_inaccessible: bool,
 
+    #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
+    older: Option<Duration>,
+
+    #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
+    newer: Option<Duration>,
+
     /// Do not calculate the size of generations
     #[clap(long)]
     no_size: bool,
@@ -184,6 +190,12 @@ struct RemoveGCRootsArgs {
     /// Exclude gc roots, whose store path is not accessible
     #[clap(short, long)]
     exclude_inaccessible: bool,
+
+    #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
+    older: Option<Duration>,
+
+    #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
+    newer: Option<Duration>,
 
     /// Do not calculate the size of generations
     #[clap(long)]
@@ -529,6 +541,20 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
         if args.exclude_inaccessible && !root.is_accessible() {
             continue
         }
+        if let Some(older) = &args.older {
+            if let Ok(age) = root.age() {
+                if age <= older {
+                    continue
+                }
+            }
+        }
+        if let Some(newer) = &args.newer {
+            if let Ok(age) = root.age() {
+                if age >= newer {
+                    continue
+                }
+            }
+        }
 
         if args.paths {
             println!("{}", root.link().to_string_lossy());
@@ -564,6 +590,21 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
         if args.exclude_inaccessible && !root.is_accessible() {
             continue
         }
+        if let Some(older) = &args.older {
+            if let Ok(age) = root.age() {
+                if age <= older {
+                    continue
+                }
+            }
+        }
+        if let Some(newer) = &args.newer {
+            if let Ok(age) = root.age() {
+                if age >= newer {
+                    continue
+                }
+            }
+        }
+
 
         if !args.force {
             fancy_print_gc_root(&root, !args.no_size);
