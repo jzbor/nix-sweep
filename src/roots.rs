@@ -53,6 +53,10 @@ impl GCRoot {
         || self.link.ends_with("nix/flake-registry.json")
     }
 
+    pub fn is_accessible(&self) ->bool {
+        self.store_path().is_ok()
+    }
+
     pub fn age(&self) -> Result<&Duration, &String> {
         self.age.as_ref()
     }

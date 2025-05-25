@@ -154,6 +154,10 @@ struct GCRootsArgs {
     #[clap(long)]
     include_missing: bool,
 
+    /// Exclude gc roots, whose store path is not accessible
+    #[clap(short, long)]
+    exclude_inaccessible: bool,
+
     /// Do not calculate the size of generations
     #[clap(long)]
     no_size: bool,
@@ -176,6 +180,10 @@ struct RemoveGCRootsArgs {
     /// Include gc roots that are referenced, but could not be found
     #[clap(long)]
     include_missing: bool,
+
+    /// Exclude gc roots, whose store path is not accessible
+    #[clap(short, long)]
+    exclude_inaccessible: bool,
 
     /// Do not calculate the size of generations
     #[clap(long)]
@@ -518,6 +526,9 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
         if !args.include_current && root.is_current() {
             continue
         }
+        if args.exclude_inaccessible && !root.is_accessible() {
+            continue
+        }
 
         if args.paths {
             println!("{}", root.link().to_string_lossy());
@@ -548,6 +559,9 @@ fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
             continue
         }
         if !args.include_current && root.is_current() {
+            continue
+        }
+        if args.exclude_inaccessible && !root.is_accessible() {
             continue
         }
 
