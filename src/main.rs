@@ -62,7 +62,7 @@ enum Subcommand {
     GeneratePreset(GeneratePresetArgs),
 
     /// Selectively remove gc roots
-    RemoveGCRoots(RemoveGCRootsArgs),
+    TidyupGCRoots(TidyupGCRootsArgs),
 
     /// Export manpage
     #[clap(hide(true))]
@@ -170,7 +170,7 @@ struct GCRootsArgs {
 }
 
 #[derive(Clone, Debug, clap::Args)]
-struct RemoveGCRootsArgs {
+struct TidyupGCRootsArgs {
     /// Delete all qualifying gc roots without asking for user confirmation
     #[clap(short, long)]
     force: bool,
@@ -573,7 +573,7 @@ fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn cmd_remove_gc_roots(args: RemoveGCRootsArgs) -> Result<(), String> {
+fn cmd_remove_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
 
     let mut roots: Vec<_> = roots.into_iter().collect();
@@ -763,7 +763,7 @@ fn main() {
         Cleanout(args) => cmd_cleanout(args),
         GC(args) => cmd_run_gc(args),
         GCRoots(args) => cmd_gc_roots(args),
-        RemoveGCRoots(args) => cmd_remove_gc_roots(args),
+        TidyupGCRoots(args) => cmd_remove_gc_roots(args),
         Generations(args) => cmd_generations(args),
         GeneratePreset(args) => cmd_generate_preset(args),
         Man(args) => cmd_man(args),
