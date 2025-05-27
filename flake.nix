@@ -62,14 +62,14 @@
         };
 
         keepNewer = lib.mkOption {
-          type = lib.types.nullOr lib.types.int;
-          default = 7;
+          type = lib.types.nullOr lib.types.str;
+          default = "7d";
           description = "Keep generations newer than <NEWER> days";
         };
 
         removeOlder = lib.mkOption {
-          type = lib.types.nullOr lib.types.int;
-          default = 30;
+          type = lib.types.nullOr lib.types.str;
+          default = "30d";
           description = "Delete generations older than <OLDER> days";
         };
 
@@ -116,8 +116,8 @@
             ] ++ (if cfg.gc && cfg.gcInterval == cfg.interval then [ "--gc" ] else [])
               ++ (if cfg.keepMin == null then [] else [ "--keep-min" (toString cfg.keepMin) ])
               ++ (if cfg.keepMax == null then [] else [ "--keep-max" (toString cfg.keepMax) ])
-              ++ (if cfg.keepNewer == null then [] else [ "--keep-newer" (toString cfg.keepNewer) ])
-              ++ (if cfg.removeOlder == null then [] else [ "--remove-older" (toString cfg.removeOlder) ])
+              ++ (if cfg.keepNewer == null then [] else [ "--keep-newer" cfg.keepNewer ])
+              ++ (if cfg.removeOlder == null then [] else [ "--remove-older" cfg.removeOlder ])
               ++ [ "system" ]
             );
             serviceConfig = {
