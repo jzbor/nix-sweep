@@ -179,8 +179,7 @@ impl ConfigPreset {
         };
 
 
-
-        if keep_min > keep_max {
+        if keep_min > keep_max && keep_min.is_some() && keep_max.is_some() {
             if other.keep_min.is_none() {
                 keep_min = keep_max;
             } else if other.keep_max.is_none() {
@@ -190,7 +189,7 @@ impl ConfigPreset {
             }
         }
 
-        if keep_newer > remove_older {
+        if keep_newer > remove_older && keep_newer.is_some() && remove_older.is_some(){
             if other.keep_newer.is_none() {
                 keep_newer = remove_older;
             } else if other.keep_max.is_none() {
