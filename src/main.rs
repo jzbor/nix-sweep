@@ -41,11 +41,13 @@ enum Subcommand {
     /// Analyze store usage
     Analyze(AnalyzeArgs),
 
-    /// Clean out old profiles
+    /// Clean out old profile generations
     ///
     /// Positive criteria (e.g. --keep-min, --keep-newer) are prioritized over negative ones
     /// (e.g. --keep-max, --remove-older).
     /// Passing 0 on any cleanout criterion will reset it to the default behavior.
+    ///
+    /// The latest generation as well as the currently active one will not be removed.
     Cleanout(CleanoutArgs),
 
     /// Run garbage collection (short for `nix-store --gc`)
