@@ -1,5 +1,6 @@
 use std::cmp::Reverse;
-use std::collections::HashMap;
+// use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use std::fmt::Display;
 use std::io::Write;
 use std::str::FromStr;
@@ -656,7 +657,7 @@ fn cmd_generations(args: GenerationsArgs) -> Result<(), String> {
 }
 
 fn cmd_generate_preset(args: GeneratePresetArgs) -> Result<(), String> {
-    let mut presets = HashMap::new();
+    let mut presets: HashMap<_, _> = HashMap::default();
     presets.insert(args.preset, args.cleanout_config);
     let s = toml::to_string(&presets)
         .map_err(|e| e.to_string())?;

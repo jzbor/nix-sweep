@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+// use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::RwLock;
@@ -133,7 +134,7 @@ pub fn count_closure_paths(input_paths: &[StorePath]) -> HashMap<StorePath, usiz
     input_paths.par_iter()
         .flat_map(|p| p.closure())
         .flatten()
-        .fold(HashMap::new, |mut acc, v| {
+        .fold(HashMap::default, |mut acc, v| {
             if let Some(existing) = acc.get_mut(&v) {
                 *existing += 1;
             } else {
@@ -146,7 +147,7 @@ pub fn count_closure_paths(input_paths: &[StorePath]) -> HashMap<StorePath, usiz
                 *m1.entry(k).or_default() += v;
             }
             m1
-        }).unwrap_or(HashMap::new())
+        }).unwrap_or(HashMap::default())
 }
 
 fn store_path_size_cache_lookup(path: &PathBuf) -> Option<u64> {
@@ -163,7 +164,7 @@ fn store_path_size_cache_insert(path: PathBuf, size: u64) {
     if let Some(cache) = cache_opt.as_mut() {
         cache.insert(path, size);
     } else {
-        let mut cache = HashMap::new();
+        let mut cache = HashMap::default();
         cache.insert(path, size);
         *cache_opt = Some(cache);
     }
@@ -183,7 +184,7 @@ fn closure_cache_insert(path: StorePath, closure: Vec<StorePath>) {
     if let Some(cache) = cache_opt.as_mut() {
         cache.insert(path, closure);
     } else {
-        let mut cache = HashMap::new();
+        let mut cache = HashMap::default();
         cache.insert(path, closure);
         *cache_opt = Some(cache);
     }
