@@ -9,16 +9,19 @@ use colored::Colorize;
 
 use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
+use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use roots::GCRoot;
-use store_paths::StorePath;
+use store_paths::{StorePath, NIX_STORE};
 
 mod config;
 mod gc;
 mod profiles;
 mod store_paths;
 mod roots;
+mod journal;
+mod files;
 
 
 #[derive(Clone, Debug)]
@@ -98,7 +101,11 @@ struct CleanoutArgs {
 }
 
 #[derive(Clone, Debug, clap::Args)]
-struct AnalyzeArgs {}
+struct AnalyzeArgs {
+    /// Don't analyze system journal
+    #[clap(long)]
+    no_journal: bool,
+}
 
 #[derive(Clone, Debug, clap::Args)]
 struct GCArgs {
@@ -682,12 +689,19 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
+fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
     let all_paths = StorePath::all_paths()?;
     let total_size: u64 = all_paths.iter()
         .map(|sp| sp.size())
         .sum();
+
+
+    let journal_size = if !args.no_journal && journal::journal_exists() {
+        eprintln!("Indexing system journal...");
+        Some(journal::journal_size())
+    } else { None };
+
 
     eprintln!("Indexing profiles...");
     let profiles = Profile::from_gc_roots()?;
@@ -700,6 +714,7 @@ fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
         sorted_profiles.push((profile, size));
     }
     sorted_profiles.sort_by_key(|(_, s)| Reverse(*s));
+
 
     eprintln!("Indexing gc roots...");
     let gc_roots: Vec<_> = roots::gc_roots(false)?
@@ -719,10 +734,11 @@ fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
 
 
     eprintln!();
-    println!("{} {}",
-        "Total store size:".green(),
-        size::Size::from_bytes(total_size).to_string().yellow()
-    );
+    println!("{}", "=> System".green());
+    println!("{}:     \t{}", NIX_STORE, size::Size::from_bytes(total_size).to_string().yellow());
+    if let Some(journal_size) = journal_size {
+        println!("{}:\t{}", JOURNAL_PATH, size::Size::from_bytes(journal_size).to_string().yellow());
+    }
 
     println!();
     println!("{}", "=> Profiles:".green());
@@ -754,6 +770,7 @@ fn cmd_analyze(_args: AnalyzeArgs) -> Result<(), String> {
             percentage_str);
     }
 
+    println!();
     Ok(())
 }
 

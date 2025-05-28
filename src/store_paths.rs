@@ -7,8 +7,10 @@ use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 
+use crate::files::*;
 
-const NIX_STORE: &str = "/nix/store";
+
+pub const NIX_STORE: &str = "/nix/store";
 static STORE_PATH_SIZE_CACHE: RwLock<Option<HashMap<PathBuf, u64>>> = RwLock::new(None);
 static CLOSURE_CACHE: RwLock<Option<HashMap<StorePath, Vec<StorePath>>>> = RwLock::new(None);
 
@@ -145,40 +147,6 @@ pub fn count_closure_paths(input_paths: &[StorePath]) -> HashMap<StorePath, usiz
             }
             m1
         }).unwrap_or(HashMap::new())
-}
-
-fn dir_size(path: &PathBuf) -> u64 {
-    let metadata = match path.symlink_metadata() {
-        Ok(meta) => meta,
-        Err(_) => return 0,
-    };
-    let ft = metadata.file_type();
-
-    if ft.is_dir() {
-        let read_dir = match fs::read_dir(path) {
-            Ok(rd) => rd,
-            Err(_) => return 0,
-        };
-        read_dir.into_iter()
-            .flatten()
-            .par_bridge()
-            .map(|entry| dir_size(&entry.path()))
-            .sum()
-    } else if ft.is_file() {
-        metadata.len()
-    } else {
-        0
-    }
-}
-
-fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
-    if path.is_symlink() {
-        let next = fs::read_link(path)
-            .map_err(|e| e.to_string())?;
-        read_link_full(&next)
-    } else {
-        Ok(path.clone())
-    }
 }
 
 fn store_path_size_cache_lookup(path: &PathBuf) -> Option<u64> {
