@@ -20,19 +20,27 @@ pub struct ConfigFile(HashMap<String, ConfigPreset>);
 #[serde(rename_all = "kebab-case")]
 pub struct ConfigPreset {
     /// Keep at least this many generations
+    ///
+    /// Pass 0 to unset this option.
     #[clap(long)]
     pub keep_min: Option<usize>,
 
     /// Keep at most this many generations
+    ///
+    /// Pass 0 to unset this option.
     #[clap(long)]
     pub keep_max: Option<usize>,
 
     /// Keep all generations newer than this many days
+    ///
+    /// Pass 0 to unset this option.
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
     #[serde(deserialize_with = "duration_str::deserialize_option_duration")]
     pub keep_newer: Option<Duration>,
 
     /// Discard all generations older than this many days
+    ///
+    /// Pass 0 to unset this option.
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
     #[serde(deserialize_with = "duration_str::deserialize_option_duration")]
     pub remove_older: Option<Duration>,
