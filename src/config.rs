@@ -112,6 +112,13 @@ impl ConfigPreset {
         let custom_named_preset = custom_config.as_ref()
             .and_then(|c| c.get_preset(preset_name));
 
+        if system_named_preset.is_none()
+                && user_named_preset.is_none()
+                && custom_named_preset.is_none()
+                && preset_name != DEFAULT_PRESET {
+            return Err(format!("Could not find preset '{}'", preset_name));
+        }
+
         let preset = Self::default()
             .override_with_opt(system_named_preset)
             .override_with_opt(user_named_preset)
