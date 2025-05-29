@@ -93,10 +93,10 @@ impl ConfigFile {
     }
 
     fn get_user_config() -> Result<Option<ConfigFile>, String> {
-        let path = xdg::BaseDirectories::with_prefix(APP_PREFIX)
-            .map_err(|e| e.to_string())?
-            .get_config_file(CONFIG_FILENAME);
-        Self::get_config(&path)
+        xdg::BaseDirectories::with_prefix(APP_PREFIX)
+            .get_config_file(CONFIG_FILENAME)
+            .ok_or(String::from("Unable to open config file"))
+            .and_then(|d| Self::get_config(&d))
     }
 
     fn get_preset(&self, s: &str) -> Option<&ConfigPreset> {
