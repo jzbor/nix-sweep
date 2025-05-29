@@ -11,8 +11,9 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
 use crate::config;
+use crate::files::dir_size_considering_hardlinks_all;
 use crate::roots::gc_roots;
-use crate::store_paths::StorePath;
+use crate::store::StorePath;
 
 
 #[derive(Debug)]
@@ -204,6 +205,23 @@ impl Profile {
         full_closure.dedup();
 
         Ok(full_closure)
+    }
+
+    pub fn full_closure_size(&self) -> Result<u64, String> {
+        let size = self.full_closure()?
+            .iter()
+            .map(|p| p.size())
+            .sum();
+        Ok(size)
+    }
+
+    pub fn full_closure_size_considering_hardlinks(&self) -> Result<u64, String> {
+        let full_closure: Vec<_> = self.full_closure()?
+            .iter()
+            .map(|sp| sp.path())
+            .cloned()
+            .collect();
+        Ok(dir_size_considering_hardlinks_all(&full_closure))
     }
 
     pub fn from_gc_roots() -> Result<Vec<Profile>, String> {

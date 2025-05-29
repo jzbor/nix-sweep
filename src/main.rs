@@ -1,4 +1,4 @@
-use std::cmp::Reverse;
+use std::cmp::{self, Reverse};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
@@ -13,12 +13,12 @@ use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use roots::GCRoot;
-use store_paths::{StorePath, NIX_STORE};
+use store::{Store, StorePath, NIX_STORE};
 
 mod config;
 mod gc;
 mod profiles;
-mod store_paths;
+mod store;
 mod roots;
 mod journal;
 mod files;
@@ -418,7 +418,7 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
     let store_paths: Vec<_> = profile.generations().iter()
         .flat_map(|g| g.store_path())
         .collect();
-    let added_size_lookup = store_paths::count_closure_paths(&store_paths);
+    let added_size_lookup = store::count_closure_paths(&store_paths);
 
     for gen in profile.generations() {
         fancy_print_generation(gen, profile, print_markers, print_size, Some(&added_size_lookup));
@@ -691,10 +691,10 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
 
 fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
-    let all_paths = StorePath::all_paths()?;
-    let total_size: u64 = all_paths.iter()
-        .map(|sp| sp.size())
-        .sum();
+    let total_size_naive: u64 = Store::size()?;
+    let total_size_hl: u64 = Store::size_considering_hardlinks()?;
+    let total_size = cmp::min(total_size_naive, total_size_hl);
+    let hardlinked = total_size_naive > total_size_hl;
 
 
     let journal_size = if !args.no_journal && journal::journal_exists() {
@@ -707,10 +707,12 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     let profiles = Profile::from_gc_roots()?;
     let mut sorted_profiles = Vec::new();
     for profile in profiles {
-        let size: u64 = profile.full_closure()?
-            .iter()
-            .map(|p| p.size())
-            .sum();
+        let size: u64 = if hardlinked {
+            profile.full_closure_size_considering_hardlinks()?
+        } else {
+            profile.full_closure_size()?
+        };
+
         sorted_profiles.push((profile, size));
     }
     sorted_profiles.sort_by_key(|(_, s)| Reverse(*s));
@@ -724,7 +726,11 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     let mut sorted_gc_roots = Vec::new();
     for root in gc_roots {
         let item = match root.store_path().cloned() {
-            Ok(path) => (root, Some(path.closure_size())),
+            Ok(path) => if hardlinked {
+                (root, Some(path.closure_size_considering_hardlinks()))
+            } else {
+                (root, Some(path.closure_size()))
+            },
             Err(_) => (root, None),
         };
         sorted_gc_roots.push(item);
@@ -735,7 +741,18 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
 
     eprintln!();
     println!("{}", "=> System".green());
-    println!("{}:     \t{}", NIX_STORE, size::Size::from_bytes(total_size).to_string().yellow());
+    if total_size_naive > total_size_hl {
+        println!("{}:     \t{} (+{} hardlinked)",
+            NIX_STORE,
+            size::Size::from_bytes(total_size_hl).to_string().yellow(),
+            size::Size::from_bytes(total_size_naive - total_size_hl)
+        );
+    } else {
+        println!("{}:     \t{}",
+            NIX_STORE,
+            size::Size::from_bytes(total_size_naive).to_string().yellow(),
+        );
+    }
     if let Some(journal_size) = journal_size {
         println!("{}:\t{}", JOURNAL_PATH, size::Size::from_bytes(journal_size).to_string().yellow());
     }

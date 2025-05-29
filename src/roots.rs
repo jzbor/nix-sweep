@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::store_paths::StorePath;
+use crate::store::StorePath;
 
 
 const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";

@@ -18,9 +18,61 @@ static CLOSURE_CACHE: RwLock<Option<HashMap<StorePath, Vec<StorePath>>>> = RwLoc
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct StorePath(PathBuf);
 
+pub struct Store();
+
+
+impl Store {
+    pub fn all_paths() -> Result<Vec<StorePath>, String> {
+        let read_dir = match fs::read_dir(NIX_STORE) {
+            Ok(rd) => rd,
+            Err(e) => return Err(e.to_string()),
+        };
+        let mut paths: Vec<_> = read_dir.into_iter()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| Self::is_valid_path(p))
+            .flat_map(StorePath::new)
+            .collect();
+
+        paths.sort_by_key(|sp| sp.0.clone());
+        paths.dedup();
+
+        Ok(paths)
+    }
+
+    pub fn is_valid_path(path: &Path) -> bool {
+        let file_name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(file_name) => file_name,
+            None => return false,
+        };
+
+        let is_in_store = path.starts_with(NIX_STORE);
+        let has_sufficient_length = file_name.len() > 32;
+        let starts_with_hash = file_name.chars()
+            .take(32)
+            .all(|c| c.is_ascii_alphanumeric() && (c.is_lowercase() || c.is_numeric()));
+
+        is_in_store && has_sufficient_length && starts_with_hash
+    }
+
+    pub fn size() -> Result<u64, String> {
+        let total_size: u64 = Store::all_paths()?
+            .iter()
+            .map(|sp| sp.size())
+            .sum();
+        Ok(total_size)
+    }
+
+    pub fn size_considering_hardlinks() -> Result<u64, String> {
+        let store_path = std::path::PathBuf::from(NIX_STORE);
+        let size = dir_size_considering_hardlinks(&store_path);
+        Ok(size)
+    }
+}
+
 impl StorePath {
     pub fn new(path: PathBuf) -> Result<Self, String> {
-        if !Self::is_valid_path(&path) {
+        if !Store::is_valid_path(&path) {
             Err(format!("'{}' is not a valid nix store path", path.to_string_lossy()))
         } else {
             Ok(StorePath(path))
@@ -87,45 +139,21 @@ impl StorePath {
             .sum()
     }
 
+    pub fn closure_size_considering_hardlinks(&self) -> u64 {
+        let closure: Vec<_> = self.closure().unwrap_or_default()
+            .iter()
+            .map(|sp| sp.path())
+            .cloned()
+            .collect();
+        dir_size_considering_hardlinks_all(&closure)
+    }
+
     pub fn added_closure_size(&self, counts: &HashMap<StorePath, usize>) -> u64 {
         let paths = self.closure().unwrap_or_default();
         paths.iter()
             .filter(|p| counts.get(p).cloned().unwrap_or(1) <= 1)
             .map(|p| p.size())
             .sum()
-    }
-
-    pub fn is_valid_path(path: &Path) -> bool {
-        let file_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(file_name) => file_name,
-            None => return false,
-        };
-
-        let is_in_store = path.starts_with(NIX_STORE);
-        let has_sufficient_length = file_name.len() > 32;
-        let starts_with_hash = file_name.chars()
-            .take(32)
-            .all(|c| c.is_ascii_alphanumeric() && (c.is_lowercase() || c.is_numeric()));
-
-        is_in_store && has_sufficient_length && starts_with_hash
-    }
-
-    pub fn all_paths() -> Result<Vec<StorePath>, String> {
-        let read_dir = match fs::read_dir(NIX_STORE) {
-            Ok(rd) => rd,
-            Err(e) => return Err(e.to_string()),
-        };
-        let mut paths: Vec<_> = read_dir.into_iter()
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| Self::is_valid_path(p))
-            .flat_map(Self::new)
-            .collect();
-
-        paths.sort_by_key(|sp| sp.0.clone());
-        paths.dedup();
-
-        Ok(paths)
     }
 }
 
