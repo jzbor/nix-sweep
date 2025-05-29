@@ -9,11 +9,12 @@ use colored::Colorize;
 
 use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
+use files::dir_size_considering_hardlinks_all;
 use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use roots::GCRoot;
-use store::{Store, StorePath, NIX_STORE};
+use store::{Store, NIX_STORE};
 
 mod config;
 mod gc;
@@ -333,8 +334,7 @@ fn format_duration(d: &Duration) -> String {
     }
 }
 
-fn fancy_print_generation(generation: &Generation, profile: &Profile, print_marker: bool, print_size: bool,
-        added_size_lookup: Option<&HashMap<StorePath, usize>>) {
+fn fancy_print_generation(generation: &Generation, profile: &Profile, print_marker: bool, print_size: bool) {
     let marker = if generation.marked() { "would remove".red() } else { "would keep".green() };
     let id_str = format!("[{}]", generation.number()).bright_blue();
 
@@ -347,18 +347,12 @@ fn fancy_print_generation(generation: &Generation, profile: &Profile, print_mark
     if print_size {
         if let Ok(path) = generation.store_path() {
             let closure_size = size::Size::from_bytes(path.closure_size());
-            let size = if let Some(occurences) = added_size_lookup {
-                let added_size = size::Size::from_bytes(path.added_closure_size(occurences));
-                format!("[{} / {}]", closure_size, added_size).yellow()
-            } else {
-                format!("[{}]", closure_size).yellow()
-            };
-            print!(" \t{}", size);
+            print!(" \t{}", format!("[{}]", closure_size).yellow());
         }
     }
 
     if profile.is_active_generation(generation) {
-        print!("\t(active)");
+        print!("\t<- active");
     }
 
     println!();
@@ -418,10 +412,9 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
     let store_paths: Vec<_> = profile.generations().iter()
         .flat_map(|g| g.store_path())
         .collect();
-    let added_size_lookup = store::count_closure_paths(&store_paths);
 
     for gen in profile.generations() {
-        fancy_print_generation(gen, profile, print_markers, print_size, Some(&added_size_lookup));
+        fancy_print_generation(gen, profile, print_markers, print_size);
     }
 
     if print_size {
@@ -442,13 +435,15 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
         kept_paths.sort_by_key(|p| p.path().clone());
         kept_paths.dedup_by_key(|p| p.path().clone());
 
-        let size: u64 = paths.iter()
-            .map(|c| c.size())
-            .sum();
+        let dirs: Vec<_> = paths.iter().map(|sp| sp.path())
+            .cloned()
+            .collect();
+        let kept_dirs: Vec<_> = kept_paths.iter().map(|sp| sp.path())
+            .cloned()
+            .collect();
+        let size = dir_size_considering_hardlinks_all(&dirs);
+        let kept_size = dir_size_considering_hardlinks_all(&kept_dirs);
 
-        let kept_size: u64 = kept_paths.iter()
-            .map(|c| c.size())
-            .sum();
 
         println!();
         println!("Estimated total size: {} ({} store paths)",
@@ -691,10 +686,9 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
 
 fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
-    let total_size_naive: u64 = Store::size()?;
-    let total_size_hl: u64 = Store::size_considering_hardlinks()?;
+    let total_size_naive: u64 = Store::size_naive()?;
+    let total_size_hl: u64 = Store::size()?;
     let total_size = cmp::min(total_size_naive, total_size_hl);
-    let hardlinked = total_size_naive > total_size_hl;
 
 
     let journal_size = if !args.no_journal && journal::journal_exists() {
@@ -707,11 +701,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     let profiles = Profile::from_gc_roots()?;
     let mut sorted_profiles = Vec::new();
     for profile in profiles {
-        let size: u64 = if hardlinked {
-            profile.full_closure_size_considering_hardlinks()?
-        } else {
-            profile.full_closure_size()?
-        };
+        let size = profile.full_closure_size()?;
 
         sorted_profiles.push((profile, size));
     }
@@ -726,11 +716,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     let mut sorted_gc_roots = Vec::new();
     for root in gc_roots {
         let item = match root.store_path().cloned() {
-            Ok(path) => if hardlinked {
-                (root, Some(path.closure_size_considering_hardlinks()))
-            } else {
-                (root, Some(path.closure_size()))
-            },
+            Ok(path) => (root, Some(path.closure_size())),
             Err(_) => (root, None),
         };
         sorted_gc_roots.push(item);

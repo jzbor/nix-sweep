@@ -5,8 +5,6 @@ use std::sync::RwLock;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
-use rayon::prelude::*;
-
 use crate::files::*;
 
 
@@ -55,7 +53,7 @@ impl Store {
         is_in_store && has_sufficient_length && starts_with_hash
     }
 
-    pub fn size() -> Result<u64, String> {
+    pub fn size_naive() -> Result<u64, String> {
         let total_size: u64 = Store::all_paths()?
             .iter()
             .map(|sp| sp.size())
@@ -63,7 +61,7 @@ impl Store {
         Ok(total_size)
     }
 
-    pub fn size_considering_hardlinks() -> Result<u64, String> {
+    pub fn size() -> Result<u64, String> {
         let store_path = std::path::PathBuf::from(NIX_STORE);
         let size = dir_size_considering_hardlinks(&store_path);
         Ok(size)
@@ -133,13 +131,6 @@ impl StorePath {
     }
 
     pub fn closure_size(&self) -> u64 {
-        let paths = self.closure().unwrap_or_default();
-        paths.iter()
-            .map(|p| p.size())
-            .sum()
-    }
-
-    pub fn closure_size_considering_hardlinks(&self) -> u64 {
         let closure: Vec<_> = self.closure().unwrap_or_default()
             .iter()
             .map(|sp| sp.path())
@@ -147,34 +138,6 @@ impl StorePath {
             .collect();
         dir_size_considering_hardlinks_all(&closure)
     }
-
-    pub fn added_closure_size(&self, counts: &HashMap<StorePath, usize>) -> u64 {
-        let paths = self.closure().unwrap_or_default();
-        paths.iter()
-            .filter(|p| counts.get(p).cloned().unwrap_or(1) <= 1)
-            .map(|p| p.size())
-            .sum()
-    }
-}
-
-pub fn count_closure_paths(input_paths: &[StorePath]) -> HashMap<StorePath, usize> {
-    input_paths.par_iter()
-        .flat_map(|p| p.closure())
-        .flatten()
-        .fold(HashMap::new, |mut acc, v| {
-            if let Some(existing) = acc.get_mut(&v) {
-                *existing += 1;
-            } else {
-                acc.insert(v.clone(), 1);
-            }
-            acc
-        })
-        .reduce_with(|mut m1, m2| {
-            for (k, v) in m2 {
-                *m1.entry(k).or_default() += v;
-            }
-            m1
-        }).unwrap_or(HashMap::new())
 }
 
 fn store_path_size_cache_lookup(path: &PathBuf) -> Option<u64> {

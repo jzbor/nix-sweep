@@ -208,14 +208,6 @@ impl Profile {
     }
 
     pub fn full_closure_size(&self) -> Result<u64, String> {
-        let size = self.full_closure()?
-            .iter()
-            .map(|p| p.size())
-            .sum();
-        Ok(size)
-    }
-
-    pub fn full_closure_size_considering_hardlinks(&self) -> Result<u64, String> {
         let full_closure: Vec<_> = self.full_closure()?
             .iter()
             .map(|sp| sp.path())
