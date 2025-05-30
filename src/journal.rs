@@ -12,5 +12,5 @@ pub fn journal_exists() -> bool {
 }
 
 pub fn journal_size() -> u64 {
-    files::dir_size(&PathBuf::from(JOURNAL_PATH))
+    files::dir_size_naive(&PathBuf::from(JOURNAL_PATH))
 }

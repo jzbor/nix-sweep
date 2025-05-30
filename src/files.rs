@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::fs::Metadata;
 use std::num;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
@@ -7,14 +8,26 @@ use std::sync::Mutex;
 
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
-pub fn dir_size(path: &PathBuf) -> u64 {
+use crate::caching::Cache;
+
+
+static NAIVE_SIZE_CACHE: Cache<PathBuf, u64> = Cache::new();
+static HL_SIZE_CACHE: Cache<PathBuf, u64> = Cache::new();
+static METADATA_SIZE_CACHE: Cache<PathBuf, Metadata> = Cache::new();
+
+
+pub fn dir_size_naive(path: &PathBuf) -> u64 {
+    if let Some(cached) = NAIVE_SIZE_CACHE.lookup(path) {
+        return cached;
+    }
+
     let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
         Err(_) => return 0,
     };
     let ft = metadata.file_type();
 
-    if ft.is_dir() {
+    let size = if ft.is_dir() {
         let read_dir = match fs::read_dir(path) {
             Ok(rd) => rd,
             Err(_) => return 0,
@@ -22,13 +35,16 @@ pub fn dir_size(path: &PathBuf) -> u64 {
         read_dir.into_iter()
             .flatten()
             .par_bridge()
-            .map(|entry| dir_size(&entry.path()))
+            .map(|entry| dir_size_naive(&entry.path()))
             .sum()
     } else if ft.is_file() {
         metadata.len()
     } else {
         0
-    }
+    };
+
+    NAIVE_SIZE_CACHE.insert(path.clone(), size);
+    size
 }
 
 pub fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
@@ -49,13 +65,20 @@ pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
     files.into_inner().unwrap().values().sum()
 }
 
-pub fn dir_size_considering_hardlinks(path: &Path) -> u64 {
+pub fn dir_size_considering_hardlinks(path: &PathBuf) -> u64 {
+    if let Some(cached) = HL_SIZE_CACHE.lookup(path) {
+        return cached;
+    }
+
     let files = Mutex::new(HashMap::default());
     dir_size_hl_helper(path.to_path_buf(), &files);
-    files.into_inner().unwrap().values().sum()
+    let size = files.into_inner().unwrap().values().sum();
+
+    HL_SIZE_CACHE.insert(path.clone(), size);
+    size
 }
 
-pub fn blkdev_of_path(path: &PathBuf) -> Result<String, String> {
+pub fn blkdev_of_path(path: &Path) -> Result<String, String> {
     let dev = path.symlink_metadata()
         .map_err(|e| e.to_string())?
         .dev();
@@ -65,7 +88,6 @@ pub fn blkdev_of_path(path: &PathBuf) -> Result<String, String> {
 pub fn find_blkdev(id: u64) -> Result<String, String> {
     fs::read_dir("/dev")
         .unwrap()
-        .into_iter()
         .flatten()
         .flat_map(|e| e.path().file_name().map(|n| (e, n.to_string_lossy().to_string())))
         .flat_map(|(e, n)| e.metadata().map(|m| (n, m)))
@@ -87,8 +109,23 @@ pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
         .map(|n: u64| n * 512)
 }
 
+pub fn cached_metadata(path: &PathBuf) -> Result<Metadata, String> {
+    if let Some(cached) = METADATA_SIZE_CACHE.lookup(path) {
+        return Ok(cached);
+    }
+
+    let res = path.symlink_metadata()
+        .map_err(|e| e.to_string());
+
+    if let Ok(meta) = res.as_ref() {
+        METADATA_SIZE_CACHE.insert(path.clone(), meta.clone());
+    }
+
+    res
+}
+
 fn dir_size_hl_helper(path: PathBuf, files: &Mutex<HashMap<u64, u64>>) {
-    let metadata = match path.symlink_metadata() {
+    let metadata = match cached_metadata(&path){
         Ok(meta) => meta,
         Err(_) => return,
     };

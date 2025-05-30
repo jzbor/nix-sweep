@@ -23,6 +23,7 @@ mod store;
 mod roots;
 mod journal;
 mod files;
+mod caching;
 
 
 #[derive(Clone, Debug)]

@@ -1,16 +1,13 @@
-use std::collections::HashMap;
-use std::ops::Deref;
 use std::str::FromStr;
-use std::sync::RwLock;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
+use crate::caching::Cache;
 use crate::files::*;
 
 
 pub const NIX_STORE: &str = "/nix/store";
-static STORE_PATH_SIZE_CACHE: RwLock<Option<HashMap<PathBuf, u64>>> = RwLock::new(None);
-static CLOSURE_CACHE: RwLock<Option<HashMap<StorePath, Vec<StorePath>>>> = RwLock::new(None);
+static CLOSURE_CACHE: Cache<StorePath, Vec<StorePath>> = Cache::new();
 
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
@@ -56,7 +53,7 @@ impl Store {
     pub fn size_naive() -> Result<u64, String> {
         let total_size: u64 = Store::all_paths()?
             .iter()
-            .map(|sp| sp.size())
+            .map(|sp| sp.size_naive())
             .sum();
         Ok(total_size)
     }
@@ -86,19 +83,12 @@ impl StorePath {
         &self.0
     }
 
-    pub fn size(&self) -> u64 {
-        match store_path_size_cache_lookup(self.path()) {
-            Some(size) => size,
-            None => {
-                let size = dir_size(&self.0);
-                store_path_size_cache_insert(self.path().clone(), size);
-                size
-            },
-        }
+    pub fn size_naive(&self) -> u64 {
+        dir_size_naive(&self.0)
     }
 
     pub fn closure(&self) -> Result<Vec<StorePath>, String> {
-        if let Some(closure) = closure_cache_lookup(self) {
+        if let Some(closure) = CLOSURE_CACHE.lookup(self) {
             return Ok(closure);
         }
 
@@ -126,7 +116,7 @@ impl StorePath {
             .map_err(|e| e.to_string())
             .map(|i| i.into_iter().map(StorePath).collect())?;
 
-        closure_cache_insert(self.clone(), closure.clone());
+        CLOSURE_CACHE.insert(self.clone(), closure.clone());
         Ok(closure)
     }
 
@@ -137,45 +127,5 @@ impl StorePath {
             .cloned()
             .collect();
         dir_size_considering_hardlinks_all(&closure)
-    }
-}
-
-fn store_path_size_cache_lookup(path: &PathBuf) -> Option<u64> {
-    if let Some(cache) = STORE_PATH_SIZE_CACHE.read().unwrap().deref() {
-        cache.get(path).cloned()
-    } else {
-        None
-    }
-}
-
-fn store_path_size_cache_insert(path: PathBuf, size: u64) {
-    let mut cache_opt = STORE_PATH_SIZE_CACHE.write().unwrap();
-
-    if let Some(cache) = cache_opt.as_mut() {
-        cache.insert(path, size);
-    } else {
-        let mut cache = HashMap::new();
-        cache.insert(path, size);
-        *cache_opt = Some(cache);
-    }
-}
-
-fn closure_cache_lookup(path: &StorePath) -> Option<Vec<StorePath>> {
-    if let Some(cache) = CLOSURE_CACHE.read().unwrap().deref() {
-        cache.get(path).cloned()
-    } else {
-        None
-    }
-}
-
-fn closure_cache_insert(path: StorePath, closure: Vec<StorePath>) {
-    let mut cache_opt = CLOSURE_CACHE.write().unwrap();
-
-    if let Some(cache) = cache_opt.as_mut() {
-        cache.insert(path, closure);
-    } else {
-        let mut cache = HashMap::new();
-        cache.insert(path, closure);
-        *cache_opt = Some(cache);
     }
 }
