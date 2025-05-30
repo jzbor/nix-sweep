@@ -1,7 +1,9 @@
-use std::os::unix::fs::MetadataExt;
-use std::sync::Mutex;
-use std::{collections::HashMap, fs};
+use std::collections::HashMap;
+use std::fs;
+use std::num;
+use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
@@ -51,6 +53,38 @@ pub fn dir_size_considering_hardlinks(path: &Path) -> u64 {
     let files = Mutex::new(HashMap::default());
     dir_size_hl_helper(path.to_path_buf(), &files);
     files.into_inner().unwrap().values().sum()
+}
+
+pub fn blkdev_of_path(path: &PathBuf) -> Result<String, String> {
+    let dev = path.symlink_metadata()
+        .map_err(|e| e.to_string())?
+        .dev();
+    find_blkdev(dev)
+}
+
+pub fn find_blkdev(id: u64) -> Result<String, String> {
+    fs::read_dir("/dev")
+        .unwrap()
+        .into_iter()
+        .flatten()
+        .flat_map(|e| e.path().file_name().map(|n| (e, n.to_string_lossy().to_string())))
+        .flat_map(|(e, n)| e.metadata().map(|m| (n, m)))
+        .filter(|(_, m)| m.file_type().is_block_device())
+        .find(|(_, m)| m.rdev() == id)
+        .map(|(n, _)| n)
+        .ok_or(format!("Could not find device for id {}", id))
+}
+
+pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
+    let size_file_path = PathBuf::from(&format!("/sys/class/block/{}/size", name));
+    fs::read_to_string(size_file_path)
+        .map_err(|e| e.to_string())?
+        .lines()
+        .next()
+        .ok_or(String::from("Size file empty"))?
+        .parse()
+        .map_err(|e: num::ParseIntError| e.to_string())
+        .map(|n: u64| n * 512)
 }
 
 fn dir_size_hl_helper(path: PathBuf, files: &Mutex<HashMap<u64, u64>>) {

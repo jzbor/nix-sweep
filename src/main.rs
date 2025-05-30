@@ -726,22 +726,35 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
 
 
     eprintln!();
-    println!("{}", "=> System".green());
-    if total_size_naive > total_size_hl {
-        println!("{}:     \t{} (+{} hardlinked)",
-            NIX_STORE,
-            size::Size::from_bytes(total_size_hl).to_string().yellow(),
-            size::Size::from_bytes(total_size_naive - total_size_hl)
-        );
+    println!("{}", "=> System:".green());
+    print!("{}:     \t{}", NIX_STORE, size::Size::from_bytes(total_size).to_string().yellow());
+    let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(NIX_STORE))
+        .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)));
+    if let Ok((dev, size)) = blkdev_info {
+        let percent = 100 * total_size / size;
+        println!("\t({:>2}% of {} ({}))", percent, dev, size::Size::from_bytes(size));
     } else {
-        println!("{}:     \t{}",
-            NIX_STORE,
-            size::Size::from_bytes(total_size_naive).to_string().yellow(),
-        );
+        println!();
     }
+
     if let Some(journal_size) = journal_size {
-        println!("{}:\t{}", JOURNAL_PATH, size::Size::from_bytes(journal_size).to_string().yellow());
+        print!("{}:\t{}", JOURNAL_PATH, size::Size::from_bytes(journal_size).to_string().yellow());
+
+        let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(NIX_STORE))
+            .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)));
+        if let Ok((dev, size)) = blkdev_info {
+            let percent = 100 * journal_size / size;
+            println!("\t({:>2}% of {} ({}))", percent, dev, size::Size::from_bytes(size));
+        } else {
+            println!();
+        }
     }
+    println!();
+
+    if total_size_naive > total_size_hl {
+        println!("Hardlinking currently saves {}", size::Size::from_bytes(total_size_naive - total_size_hl).to_string().green());
+    }
+
 
     println!();
     println!("{}", "=> Profiles:".green());
@@ -755,6 +768,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
             format!("[{} generations]", profile.generations().len()).bright_blue(),
         );
     }
+
 
     println!();
     println!("{}", "=> GC Roots:".green());
