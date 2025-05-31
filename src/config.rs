@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -6,6 +5,8 @@ use std::time::Duration;
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+
+use crate::HashMap;
 
 
 const SYSTEM_CONFIG: &str = "/etc/nix-sweep/presets.toml";

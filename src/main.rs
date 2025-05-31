@@ -13,7 +13,6 @@ use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use roots::GCRoot;
-use rustc_hash::FxHashMap as HashMap;
 use store::{Store, NIX_STORE};
 
 mod config;
@@ -25,6 +24,8 @@ mod journal;
 mod files;
 mod caching;
 
+
+type HashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 
 #[derive(Clone, Debug)]
 enum ProfileType {

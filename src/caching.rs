@@ -1,7 +1,7 @@
 use std::sync::RwLock;
 use std::hash::Hash;
 
-use rustc_hash::FxHashMap as HashMap;
+use crate::HashMap;
 
 
 pub struct Cache<K, V: Clone>(RwLock<Option<HashMap<K, V>>>);

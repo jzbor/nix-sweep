@@ -4,9 +4,9 @@ use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
 use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
-use rustc_hash::FxHashMap as HashMap;
 
 use crate::caching::Cache;
+use crate::HashMap;
 
 
 static INODE_CACHE: Cache<PathBuf, HashMap<InoKey, u64>> = Cache::new();
