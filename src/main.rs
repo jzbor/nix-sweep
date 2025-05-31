@@ -1,5 +1,4 @@
 use std::cmp::{self, Reverse};
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
 use std::str::FromStr;
@@ -14,6 +13,7 @@ use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use roots::GCRoot;
+use rustc_hash::FxHashMap as HashMap;
 use store::{Store, NIX_STORE};
 
 mod config;
@@ -652,7 +652,7 @@ fn cmd_generations(args: GenerationsArgs) -> Result<(), String> {
 }
 
 fn cmd_generate_preset(args: GeneratePresetArgs) -> Result<(), String> {
-    let mut presets = HashMap::new();
+    let mut presets = HashMap::default();
     presets.insert(args.preset, args.cleanout_config);
     let s = toml::to_string(&presets)
         .map_err(|e| e.to_string())?;

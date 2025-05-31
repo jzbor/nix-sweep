@@ -1,7 +1,8 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};

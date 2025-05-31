@@ -1,20 +1,22 @@
-use std::collections::HashMap;
 use std::fs;
 use std::fs::Metadata;
 use std::num;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
-use rayon::iter::{ParallelBridge, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::caching::Cache;
 
 
 static NAIVE_SIZE_CACHE: Cache<PathBuf, u64> = Cache::new();
-static HL_SIZE_CACHE: Cache<PathBuf, u64> = Cache::new();
+static HL_SIZE_CACHE: Cache<PathBuf, HashMap<InoKey, u64>> = Cache::new();
 static METADATA_SIZE_CACHE: Cache<PathBuf, Metadata> = Cache::new();
 
+type Ino = u64;
+type DevId = u64;
+type InoKey = (DevId, Ino);
 
 pub fn dir_size_naive(path: &PathBuf) -> u64 {
     if let Some(cached) = NAIVE_SIZE_CACHE.lookup(path) {
@@ -58,24 +60,16 @@ pub fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
 }
 
 pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
-    let files = Mutex::new(HashMap::default());
-    for path in paths {
-        dir_size_hl_helper(path.clone(), &files);
-    }
-    files.into_inner().unwrap().values().sum()
+    let inodes = paths.par_iter()
+        .cloned()
+        .map(dir_size_hl_helper)
+        .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
+    inodes.values().sum()
 }
 
 pub fn dir_size_considering_hardlinks(path: &PathBuf) -> u64 {
-    if let Some(cached) = HL_SIZE_CACHE.lookup(path) {
-        return cached;
-    }
-
-    let files = Mutex::new(HashMap::default());
-    dir_size_hl_helper(path.to_path_buf(), &files);
-    let size = files.into_inner().unwrap().values().sum();
-
-    HL_SIZE_CACHE.insert(path.clone(), size);
-    size
+    let inodes = dir_size_hl_helper(path.to_path_buf());
+    inodes.values().sum()
 }
 
 pub fn blkdev_of_path(path: &Path) -> Result<String, String> {
@@ -124,25 +118,35 @@ pub fn cached_metadata(path: &PathBuf) -> Result<Metadata, String> {
     res
 }
 
-fn dir_size_hl_helper(path: PathBuf, files: &Mutex<HashMap<u64, u64>>) {
+fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
+    if let Some(cached) = HL_SIZE_CACHE.lookup(&path) {
+        return cached;
+    }
+
     let metadata = match cached_metadata(&path){
         Ok(meta) => meta,
-        Err(_) => return,
+        Err(_) => return HashMap::default(),
     };
     let ft = metadata.file_type();
 
     if ft.is_dir() {
-        let read_dir = match fs::read_dir(path) {
+        let read_dir = match fs::read_dir(&path) {
             Ok(rd) => rd,
-            Err(_) => return,
+            Err(_) => return HashMap::default(),
         };
-        read_dir.into_iter()
+        let inodes = read_dir.into_iter()
             .par_bridge()
             .flatten()
-            .for_each(|entry| dir_size_hl_helper(entry.path(), files));
+            .map(|e| dir_size_hl_helper(e.path()))
+            .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
+        HL_SIZE_CACHE.insert(path, inodes.clone());
+        inodes
     } else if ft.is_file() {
-        files.lock().unwrap()
-            .insert(metadata.ino(), metadata.len());
+        let mut new = HashMap::default();
+        new.insert((metadata.dev(), metadata.ino()), metadata.len());
+        new
+    } else {
+        HashMap::default()
     }
 }
 
