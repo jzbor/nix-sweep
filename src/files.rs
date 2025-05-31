@@ -1,5 +1,4 @@
 use std::fs;
-use std::fs::Metadata;
 use std::num;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
@@ -10,19 +9,13 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::caching::Cache;
 
 
-static NAIVE_SIZE_CACHE: Cache<PathBuf, u64> = Cache::new();
-static HL_SIZE_CACHE: Cache<PathBuf, HashMap<InoKey, u64>> = Cache::new();
-static METADATA_SIZE_CACHE: Cache<PathBuf, Metadata> = Cache::new();
+static INODE_CACHE: Cache<PathBuf, HashMap<InoKey, u64>> = Cache::new();
 
 type Ino = u64;
 type DevId = u64;
 type InoKey = (DevId, Ino);
 
 pub fn dir_size_naive(path: &PathBuf) -> u64 {
-    if let Some(cached) = NAIVE_SIZE_CACHE.lookup(path) {
-        return cached;
-    }
-
     let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
         Err(_) => return 0,
@@ -45,7 +38,6 @@ pub fn dir_size_naive(path: &PathBuf) -> u64 {
         0
     };
 
-    NAIVE_SIZE_CACHE.insert(path.clone(), size);
     size
 }
 
@@ -61,14 +53,20 @@ pub fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
 
 pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
     let inodes = paths.par_iter()
-        .cloned()
-        .map(dir_size_hl_helper)
+        .map(|p| (p, INODE_CACHE.lookup(p)))
+        .map(|(p, inoo)| match inoo {
+            Some(inodes) => inodes,
+            None => INODE_CACHE.insert_inline(p.clone(), dir_size_hl_helper(p)),
+        })
         .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
     inodes.values().sum()
 }
 
 pub fn dir_size_considering_hardlinks(path: &PathBuf) -> u64 {
-    let inodes = dir_size_hl_helper(path.to_path_buf());
+    let inodes = match INODE_CACHE.lookup(path) {
+        Some(inodes) => inodes,
+        None => INODE_CACHE.insert_inline(path.clone(), dir_size_hl_helper(path)),
+    };
     inodes.values().sum()
 }
 
@@ -103,27 +101,8 @@ pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
         .map(|n: u64| n * 512)
 }
 
-pub fn cached_metadata(path: &PathBuf) -> Result<Metadata, String> {
-    if let Some(cached) = METADATA_SIZE_CACHE.lookup(path) {
-        return Ok(cached);
-    }
-
-    let res = path.symlink_metadata()
-        .map_err(|e| e.to_string());
-
-    if let Ok(meta) = res.as_ref() {
-        METADATA_SIZE_CACHE.insert(path.clone(), meta.clone());
-    }
-
-    res
-}
-
-fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
-    if let Some(cached) = HL_SIZE_CACHE.lookup(&path) {
-        return cached;
-    }
-
-    let metadata = match cached_metadata(&path){
+fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
+    let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
         Err(_) => return HashMap::default(),
     };
@@ -137,9 +116,8 @@ fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
         let inodes = read_dir.into_iter()
             .par_bridge()
             .flatten()
-            .map(|e| dir_size_hl_helper(e.path()))
+            .map(|e| dir_size_hl_helper(&e.path()))
             .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
-        HL_SIZE_CACHE.insert(path, inodes.clone());
         inodes
     } else if ft.is_file() {
         let mut new = HashMap::default();
