@@ -400,8 +400,8 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool) {
     }
     if print_size {
         match size {
-            Some(size) => print!("size: {}, ", size.to_string().yellow()),
-            None => print!("size: {}, ", "n/a".to_string().yellow()),
+            Some(size) => print!("closure size: {}, ", size.to_string().yellow()),
+            None => print!("closure size: {}, ", "n/a".to_string().yellow()),
         }
     }
     println!("type: {}", attributes.blue());
