@@ -660,6 +660,7 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
 
 fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
+    let nstore_paths = Store::all_paths()?.len();
     let (store_size_naive, store_size_hl) = rayon::join(
         || Store::size_naive(),
         || Store::size()
@@ -729,10 +730,12 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
             println!();
         }
     }
+
     println!();
+    println!("Number of store paths:      \t{}", nstore_paths.to_string().bright_blue());
 
     if store_size_naive > store_size_hl {
-        println!("Hardlinking currently saves {}.", size::Size::from_bytes(store_size_naive - store_size_hl).to_string().green());
+    println!("Hardlinking currently saves:\t{}", size::Size::from_bytes(store_size_naive - store_size_hl).to_string().green());
     }
 
 
