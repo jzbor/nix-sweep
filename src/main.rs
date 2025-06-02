@@ -677,20 +677,22 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
 
     eprintln!("Indexing profiles...");
     let profile_paths = GCRoot::profile_paths()?;
-    let mut sorted_profiles = Vec::new();
+    let mut sorted_profiles = Vec::with_capacity(profile_paths.len());
     for path in profile_paths {
         let profile = Profile::from_path(path.clone()).ok();
         let size = profile.as_ref()
             .and_then(|p| Profile::full_closure_size(p).ok());
         sorted_profiles.push((path, profile, size));
     }
+    sorted_profiles.par_sort_by_key(|(p, _, _)| p.clone());
+    sorted_profiles.par_sort_by_key(|(_, _, s)| Reverse(*s));
 
     eprintln!("Indexing gc roots...");
     let gc_roots: Vec<_> = roots::gc_roots(false)?
         .into_iter()
         .filter(|r| !r.is_profile() && !r.is_current())
         .collect();
-    let mut sorted_gc_roots = Vec::new();
+    let mut sorted_gc_roots = Vec::with_capacity(gc_roots.len());
     for root in gc_roots {
         let item = match root.store_path().cloned() {
             Ok(path) => (root, Some(path.closure_size())),
