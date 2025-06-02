@@ -4,6 +4,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+use rayon::slice::ParallelSliceMut;
+
 use crate::store::StorePath;
 
 
@@ -67,7 +71,7 @@ impl GCRoot {
             .map(|r| r.link().to_str().map(|s| s.to_owned()))
             .collect();
         let mut paths: Vec<_> = links.ok_or(String::from("Unable to format gc root link"))?
-            .iter()
+            .par_iter()
             .flat_map(|l| {
                 let mut s = match l.strip_suffix("-link") {
                     Some(rem) => rem.to_string(),
@@ -85,7 +89,7 @@ impl GCRoot {
                 None
             }).collect();
 
-        paths.sort();
+        paths.par_sort();
         paths.dedup();
 
         Ok(paths)

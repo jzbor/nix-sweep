@@ -13,6 +13,7 @@ use fmt::*;
 use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::slice::ParallelSliceMut;
 use roots::GCRoot;
 use store::{Store, NIX_STORE};
 
@@ -402,10 +403,10 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
             .flatten()
             .collect();
 
-        paths.sort_by_key(|p| p.path().clone());
+        paths.par_sort_by_key(|p| p.path().clone());
         paths.dedup_by_key(|p| p.path().clone());
 
-        kept_paths.sort_by_key(|p| p.path().clone());
+        kept_paths.par_sort_by_key(|p| p.path().clone());
         kept_paths.dedup_by_key(|p| p.path().clone());
 
         let dirs: Vec<_> = paths.iter().map(|sp| sp.path())
@@ -505,8 +506,8 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
 
 fn cmd_gc_roots(args: GCRootsArgs) -> Result<(), String> {
     let mut roots = roots::gc_roots(args.include_missing)?;
-    roots.sort_by_key(|r| r.link().clone());
-    roots.sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
+    roots.par_sort_by_key(|r| r.link().clone());
+    roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
     for root in roots {
         if !args.include_profiles && root.is_profile() {
@@ -554,8 +555,8 @@ fn cmd_remove_gc_roots(args: TidyupGCRootsArgs) -> Result<(), String> {
     let roots = roots::gc_roots(args.include_missing)?;
 
     let mut roots: Vec<_> = roots.into_iter().collect();
-    roots.sort_by_key(|r| r.link().clone());
-    roots.sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
+    roots.par_sort_by_key(|r| r.link().clone());
+    roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
     for root in roots {
         if !args.include_profiles && root.is_profile() {
@@ -659,9 +660,13 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
 
 fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
-    let total_size_naive: u64 = Store::size_naive()?;
-    let total_size_hl: u64 = Store::size()?;
-    let store_size = cmp::min(total_size_naive, total_size_hl);
+    let (store_size_naive, store_size_hl) = rayon::join(
+        || Store::size_naive(),
+        || Store::size()
+    );
+    let store_size_naive = store_size_naive?;
+    let store_size_hl = store_size_hl?;
+    let store_size = cmp::min(store_size_naive, store_size_hl);
 
 
     let journal_size = if !args.no_journal && journal::journal_exists() {
@@ -693,8 +698,8 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
         };
         sorted_gc_roots.push(item);
     }
-    sorted_gc_roots.sort_by_key(|(p, _)| p.link().clone());
-    sorted_gc_roots.sort_by_key(|(_, s)| Reverse(*s));
+    sorted_gc_roots.par_sort_by_key(|(p, _)| p.link().clone());
+    sorted_gc_roots.par_sort_by_key(|(_, s)| Reverse(*s));
 
 
     eprintln!();
@@ -724,8 +729,8 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     }
     println!();
 
-    if total_size_naive > total_size_hl {
-        println!("Hardlinking currently saves {}.", size::Size::from_bytes(total_size_naive - total_size_hl).to_string().green());
+    if store_size_naive > store_size_hl {
+        println!("Hardlinking currently saves {}.", size::Size::from_bytes(store_size_naive - store_size_hl).to_string().green());
     }
 
 

@@ -9,9 +9,11 @@ use std::time::SystemTime;
 
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
+use rayon::slice::ParallelSliceMut;
 
 use crate::config;
 use crate::files::dir_size_considering_hardlinks_all;
+use crate::roots::gc_roots;
 use crate::store::StorePath;
 
 
@@ -200,7 +202,7 @@ impl Profile {
             .flatten()
             .collect();
 
-        full_closure.sort_by_key(|p| p.path().clone());
+        full_closure.par_sort_by_key(|p| p.path().clone());
         full_closure.dedup();
 
         Ok(full_closure)

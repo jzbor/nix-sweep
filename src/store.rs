@@ -2,6 +2,8 @@ use std::str::FromStr;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
+use rayon::slice::ParallelSliceMut;
+
 use crate::caching::Cache;
 use crate::files::*;
 
@@ -29,7 +31,7 @@ impl Store {
             .flat_map(StorePath::new)
             .collect();
 
-        paths.sort_by_key(|sp| sp.0.clone());
+        paths.par_sort_by_key(|sp| sp.0.clone());
         paths.dedup();
 
         Ok(paths)
