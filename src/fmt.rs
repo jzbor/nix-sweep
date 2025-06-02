@@ -22,6 +22,10 @@ pub trait Formattable: Display {
         FmtBracketed::new(self)
     }
 
+    fn with_prefix<const SUFF_LEN: usize>(self, prefix: String) -> FmtPrefix<SUFF_LEN, Self> where Self: Sized {
+        FmtPrefix::new(self, prefix)
+    }
+
     fn with_suffix<const SUFF_LEN: usize>(self, suffix: String) -> FmtSuffix<SUFF_LEN, Self> where Self: Sized {
         FmtSuffix::new(self, suffix)
     }
@@ -34,6 +38,7 @@ pub struct FmtPercentage(u64);
 pub struct FmtBracketed<T: Formattable>(Box<T>, [char; 2]);
 pub struct FmtOrNA<T: Formattable>(Option<T>, bool);
 pub struct FmtAge(Duration);
+pub struct FmtPrefix<const ADD: usize, T: Formattable>(Box<T>, String);
 pub struct FmtSuffix<const ADD: usize, T: Formattable>(Box<T>, String);
 
 
@@ -88,6 +93,12 @@ impl FmtAge {
     }
 }
 
+impl<const ADD: usize, T: Formattable> FmtPrefix<ADD, T> {
+    pub fn new(obj: T, prefix: String) -> Self {
+        FmtPrefix(Box::new(obj), prefix)
+    }
+}
+
 impl<const ADD: usize, T: Formattable> FmtSuffix<ADD, T> {
     pub fn new(obj: T, suffix: String) -> Self {
         FmtSuffix(Box::new(obj), suffix)
@@ -114,6 +125,10 @@ impl<T: Formattable> Formattable for FmtOrNA<T> {
 
 impl Formattable for FmtAge {
     const MAX_WIDTH: usize = 9;
+}
+
+impl<const ADD: usize, T: Formattable> Formattable for FmtPrefix<ADD, T> {
+    const MAX_WIDTH: usize = T::MAX_WIDTH + ADD;
 }
 
 impl<const ADD: usize, T: Formattable> Formattable for FmtSuffix<ADD, T> {
@@ -186,6 +201,12 @@ impl Display for FmtAge {
             write!(f, "{} years", years)
         }
 
+    }
+}
+
+impl<const ADD: usize, T: Formattable> Display for FmtPrefix<ADD, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.1, self.0.to_string())
     }
 }
 

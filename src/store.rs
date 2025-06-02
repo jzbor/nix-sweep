@@ -85,6 +85,10 @@ impl StorePath {
         &self.0
     }
 
+    pub fn size(&self) -> u64 {
+        dir_size_considering_hardlinks(&self.0)
+    }
+
     pub fn size_naive(&self) -> u64 {
         dir_size_naive(&self.0)
     }
@@ -129,5 +133,13 @@ impl StorePath {
             .cloned()
             .collect();
         dir_size_considering_hardlinks_all(&closure)
+    }
+
+    pub fn closure_size_naive(&self) -> u64 {
+       self.closure().unwrap_or_default()
+            .iter()
+            .map(|sp| sp.path())
+            .map(|p| dir_size_naive(p))
+            .sum()
     }
 }

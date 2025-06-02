@@ -16,7 +16,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
 use rayon::ThreadPoolBuilder;
 use roots::GCRoot;
-use store::{Store, NIX_STORE};
+use store::{Store, StorePath, NIX_STORE};
 
 mod config;
 mod gc;
@@ -80,6 +80,9 @@ enum Subcommand {
     /// Generate a TOML preset config to use with `nix-sweep cleanout`
     #[clap(hide(true))]
     GeneratePreset(GeneratePresetArgs),
+
+    /// Show information on a path or a symlink to a path
+    PathInfo(PathInfoArgs),
 
     /// Selectively remove gc roots
     TidyupGCRoots(TidyupGCRootsArgs),
@@ -240,6 +243,12 @@ struct GeneratePresetArgs {
 struct ManArgs {
     directory: path::PathBuf,
 }
+
+#[derive(Clone, Debug, clap::Args)]
+struct PathInfoArgs {
+    path: path::PathBuf,
+}
+
 
 impl FromStr for ProfileType {
     type Err = String;
@@ -684,6 +693,51 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
     Ok(())
 }
 
+fn cmd_path_info(args: PathInfoArgs) -> Result<(), String> {
+    let metadata = fs::symlink_metadata(&args.path)
+        .map_err(|e| e.to_string())?;
+    let store_path = StorePath::from_symlink(&args.path)?;
+    let closure = store_path.closure()?;
+    let size = store_path.size();
+    let naive_size = store_path.size_naive();
+    let closure_size = store_path.closure_size();
+    let naive_closure_size = store_path.closure_size_naive();
+    println!();
+    if metadata.is_symlink() {
+        println!("{}", args.path.to_string_lossy());
+        println!("  {}", format!("-> {}", store_path.path().to_string_lossy()).bright_black());
+    } else {
+        println!("{}", store_path.path().to_string_lossy());
+    }
+
+    println!();
+
+    print!("  size:             {}", FmtSize::new(size).left_pad().bright_yellow());
+    if naive_size > size {
+        print!(" \t{}", FmtSize::new(naive_size)
+            .with_prefix::<18>("hardlinking saves ".to_owned())
+            .bracketed()
+            .right_pad()
+        );
+    }
+    println!();
+
+    print!("  closure size:     {}", FmtSize::new(closure_size).left_pad().yellow());
+    if naive_closure_size > closure_size {
+        print!(" \t{}", FmtSize::new(naive_closure_size - closure_size)
+            .with_prefix::<18>("hardlinking saves ".to_owned())
+            .bracketed()
+            .right_pad()
+        );
+    }
+    println!();
+
+    println!("  paths in closure: {:>align$}", closure.len().to_string().bright_blue(), align = FmtSize::MAX_WIDTH);
+    println!();
+
+    Ok(())
+}
+
 fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
     let nstore_paths = Store::all_paths()?.len();
@@ -820,6 +874,7 @@ fn main() {
         GeneratePreset(args) => cmd_generate_preset(args),
         Man(args) => cmd_man(args),
         Analyze(args) => cmd_analyze(args),
+        PathInfo(args) => cmd_path_info(args),
     };
     resolve(res);
 }
