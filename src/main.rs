@@ -344,7 +344,7 @@ fn fancy_print_generation(generation: &Generation, profile: &Profile, print_mark
     print!("{}\t{}", id_str,
         FmtAge::new(generation.age())
             .with_suffix::<4>(" old".to_owned())
-            .center_pad());
+            .left_pad());
 
     if print_marker {
         print!(", {}", marker);

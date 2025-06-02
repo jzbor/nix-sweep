@@ -14,10 +14,6 @@ pub trait Formattable: Display {
         format!("{:<width$}", self.to_string(), width = Self::MAX_WIDTH)
     }
 
-    fn center_pad(&self) -> String {
-        format!("{:^width$}", self.to_string(), width = Self::MAX_WIDTH)
-    }
-
     fn bracketed(self) -> FmtBracketed<Self> where Self: Sized {
         FmtBracketed::new(self)
     }
