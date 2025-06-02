@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::io::Write;
 use std::str::FromStr;
 use std::time::Duration;
-use std::{fs, path, process};
+use std::{env, fs, path, process, thread};
 use colored::Colorize;
 
 use clap::{CommandFactory, Parser};
@@ -14,6 +14,7 @@ use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
+use rayon::ThreadPoolBuilder;
 use roots::GCRoot;
 use store::{Store, NIX_STORE};
 
@@ -28,6 +29,10 @@ mod caching;
 mod fmt;
 
 
+const THREADS_ENV_VAR: &str = "NIX_SWEEP_NUM_THREADS";
+const MAX_THREADS: usize = 4;
+
+
 type HashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 
 #[derive(Clone, Debug)]
@@ -38,6 +43,10 @@ enum ProfileType {
     Custom(path::PathBuf),
 }
 
+/// Utility to clean up old Nix profile generations and left-over garbage collection roots
+///
+/// You can adjust the number of worker threads this program uses with the `NIX_SWEEP_NUM_THREADS` env
+/// variable.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about)]
 pub struct Args {
@@ -251,6 +260,7 @@ impl FromStr for ProfileType {
 }
 
 
+
 fn resolve<T, E: Display>(result: Result<T, E>) -> T {
     match result {
         Ok(t) => t,
@@ -300,6 +310,22 @@ fn ack(question: &str) {
         };
         return;
     }
+}
+
+fn init_rayon() -> Result<(), String> {
+    let nthreads: usize = match env::var(THREADS_ENV_VAR).ok() {
+        Some(n) => n.parse()
+            .map_err(|_| format!("Unable to parse {} environment variable", THREADS_ENV_VAR))?,
+        None => match thread::available_parallelism().ok() {
+            Some(avail) => cmp::min(avail.into(), MAX_THREADS),
+            None => MAX_THREADS,
+        },
+    };
+
+    ThreadPoolBuilder::new()
+        .num_threads(nthreads)
+        .build_global()
+        .map_err(|e| e.to_string())
 }
 
 fn fancy_print_generation(generation: &Generation, profile: &Profile, print_marker: bool, print_size: bool) {
@@ -735,7 +761,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!("Number of store paths:      \t{}", nstore_paths.to_string().bright_blue());
 
     if store_size_naive > store_size_hl {
-    println!("Hardlinking currently saves:\t{}", size::Size::from_bytes(store_size_naive - store_size_hl).to_string().green());
+        println!("Hardlinking currently saves:\t{}", size::Size::from_bytes(store_size_naive - store_size_hl).to_string().green());
     }
 
 
@@ -782,6 +808,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
 
 fn main() {
     let config = Args::parse();
+    resolve(init_rayon());
 
     use Subcommand::*;
     let res = match config.subcommand {
