@@ -215,35 +215,6 @@ impl Profile {
             .collect();
         Ok(dir_size_considering_hardlinks_all(&full_closure))
     }
-
-    pub fn from_gc_roots() -> Result<Vec<Profile>, String> {
-        let links: Option<Vec<_>> = gc_roots(false)?.into_iter()
-            .filter(|r| r.is_profile())
-            .map(|r| r.link().to_str().map(|s| s.to_owned()))
-            .collect();
-        let mut paths: Vec<_> = links.ok_or(String::from("Unable to format gc root link"))?
-            .iter()
-            .flat_map(|l| {
-                let mut s = match l.strip_suffix("-link") {
-                    Some(rem) => rem.to_string(),
-                    None => return None,
-                };
-
-                while let Some(last) = s.pop() {
-                    if !last.is_numeric() {
-                        if last == '-' { return Some(s); } else { return None; }
-                    }
-                }
-                None
-            }).collect();
-
-        paths.sort();
-        paths.dedup();
-
-        paths.into_iter()
-            .map(|p| Profile::from_path(PathBuf::from(p)))
-            .collect()
-    }
 }
 
 impl Generation {

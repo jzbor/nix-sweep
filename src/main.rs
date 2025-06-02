@@ -700,15 +700,14 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
 
 
     eprintln!("Indexing profiles...");
-    let profiles = Profile::from_gc_roots()?;
+    let profile_paths = GCRoot::profile_paths()?;
     let mut sorted_profiles = Vec::new();
-    for profile in profiles {
-        let size = profile.full_closure_size()?;
-
-        sorted_profiles.push((profile, size));
+    for path in profile_paths {
+        let profile = Profile::from_path(path.clone()).ok();
+        let size = profile.as_ref()
+            .and_then(|p| Profile::full_closure_size(p).ok());
+        sorted_profiles.push((path, profile, size));
     }
-    sorted_profiles.sort_by_key(|(_, s)| Reverse(*s));
-
 
     eprintln!("Indexing gc roots...");
     let gc_roots: Vec<_> = roots::gc_roots(false)?
@@ -761,13 +760,25 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!();
     println!("{}", "=> Profiles:".green());
 
-    for (profile, size) in sorted_profiles {
-        let percentage = 100 * size / total_size;
-        println!("{:<50}\t{} ({}%)\t{}",
-            profile.path().to_string_lossy(),
-            size::Size::from_bytes(size).to_string().yellow(),
-            percentage,
-            format!("[{} generations]", profile.generations().len()).bright_blue(),
+    for (path, profile, size) in sorted_profiles {
+        let size_str = match size {
+            Some(size) => size::Size::from_bytes(size).to_string(),
+            None => "n/a".to_owned(),
+        };
+        let percentage_str = match size {
+            Some(size) => format!("{}%", 100 * size / total_size),
+            None => "n/a".to_owned(),
+        };
+        let generations_str = match profile {
+            Some(profile) => format!("[{} generations]", profile.generations().len()),
+            None => "n/a".to_owned(),
+        };
+
+        println!("{:<50}\t{} ({})\t{}",
+            path.to_string_lossy(),
+            size_str.yellow(),
+            percentage_str,
+            generations_str.bright_blue(),
         );
     }
 

@@ -60,6 +60,36 @@ impl GCRoot {
     pub fn age(&self) -> Result<&Duration, &String> {
         self.age.as_ref()
     }
+
+    pub fn profile_paths() -> Result<Vec<PathBuf>, String> {
+        let links: Option<Vec<_>> = gc_roots(false)?.into_iter()
+            .filter(|r| r.is_profile())
+            .map(|r| r.link().to_str().map(|s| s.to_owned()))
+            .collect();
+        let mut paths: Vec<_> = links.ok_or(String::from("Unable to format gc root link"))?
+            .iter()
+            .flat_map(|l| {
+                let mut s = match l.strip_suffix("-link") {
+                    Some(rem) => rem.to_string(),
+                    None => return None,
+                };
+
+                while let Some(last) = s.pop() {
+                    if !last.is_numeric() {
+                        match last {
+                            '-' => return Some(PathBuf::from(s)),
+                            _ => return None,
+                        }
+                    }
+                }
+                None
+            }).collect();
+
+        paths.sort();
+        paths.dedup();
+
+        Ok(paths)
+    }
 }
 
 fn find_links(path: &PathBuf, mut links: Vec<PathBuf>) -> Result<Vec<PathBuf>, String> {
