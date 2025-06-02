@@ -32,7 +32,7 @@ pub trait Formattable: Display {
 pub struct FmtSize(Size);
 pub struct FmtPercentage(u64);
 pub struct FmtBracketed<T: Formattable>(Box<T>, [char; 2]);
-pub struct FmtOrNA<T: Formattable>(Option<T>);
+pub struct FmtOrNA<T: Formattable>(Option<T>, bool);
 pub struct FmtAge(Duration);
 pub struct FmtSuffix<const ADD: usize, T: Formattable>(Box<T>, String);
 
@@ -69,11 +69,16 @@ impl<T: Formattable> FmtOrNA<T> {
     }
 
     pub fn with(obj: T) -> Self {
-        FmtOrNA(Some(obj))
+        FmtOrNA(Some(obj), true)
     }
 
     pub fn na() -> Self {
-        FmtOrNA(None)
+        FmtOrNA(None, true)
+    }
+
+    pub fn or_empty(mut self) -> Self {
+        self.1 = false;
+        self
     }
 }
 
@@ -139,7 +144,7 @@ impl<T: Formattable> Display for FmtOrNA<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             Some(val) => write!(f, "{}", val),
-            None => write!(f, "n/a"),
+            None => write!(f, "{}", if self.1 { "n/a" } else { "" }),
         }
     }
 }

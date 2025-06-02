@@ -738,12 +738,11 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
 
     println!();
     println!("{}", "=> Profiles:".green());
-
     for (path, profile, size) in sorted_profiles {
         let size_str = FmtOrNA::mapped(size, |s| FmtSize::new(s))
             .left_pad();
-        let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size))
-            .bracketed()
+        let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
+            .or_empty()
             .right_pad();
         let generations_str = match profile {
             Some(profile) => format!("[{} generations]", profile.generations().len()),
@@ -764,8 +763,8 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     for (root, size) in sorted_gc_roots {
         let size_str = FmtOrNA::mapped(size, |s| FmtSize::new(s))
             .left_pad();
-        let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size))
-            .bracketed()
+        let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
+            .or_empty()
             .right_pad();
         println!("{:<50} {:>11} {:<5}",
             root.link().to_string_lossy(),
@@ -776,6 +775,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!();
     Ok(())
 }
+
 
 fn main() {
     let config = Args::parse();
