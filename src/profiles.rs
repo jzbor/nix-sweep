@@ -12,7 +12,6 @@ use rayon::iter::ParallelIterator;
 
 use crate::config;
 use crate::files::dir_size_considering_hardlinks_all;
-use crate::roots::gc_roots;
 use crate::store::StorePath;
 
 

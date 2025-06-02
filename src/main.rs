@@ -9,6 +9,7 @@ use colored::Colorize;
 use clap::{CommandFactory, Parser};
 use config::ConfigPreset;
 use files::dir_size_considering_hardlinks_all;
+use fmt::*;
 use journal::JOURNAL_PATH;
 use profiles::{Generation, Profile};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -23,6 +24,7 @@ mod roots;
 mod journal;
 mod files;
 mod caching;
+mod fmt;
 
 
 type HashMap<K, V> = rustc_hash::FxHashMap<K, V>;
@@ -299,48 +301,14 @@ fn ack(question: &str) {
     }
 }
 
-fn format_duration(d: &Duration) -> String {
-    let seconds = d.as_secs();
-    let minutes = seconds / 60;
-    let hours = minutes / 60;
-    let days = hours / 24;
-    let weeks = days / 7;
-    let years = days / 365;
-
-    if minutes < 1 {
-        format!("{} sec", seconds)
-    } else if hours < 1 {
-        format!("{} min", minutes)
-    } else if days < 1 {
-        if hours == 1 {
-            String::from("1 hour")
-        } else {
-            format!("{} hours", hours)
-        }
-    } else if years < 1 {
-        if days == 1 {
-            String::from("1 day")
-        } else {
-            format!("{} days", days)
-        }
-    } else if years < 3 {
-        if weeks == 1 {
-            String::from("1 week")
-        } else {
-            format!("{} weeks", weeks)
-        }
-    } else if years == 1 {
-        String::from("1 year")
-    } else {
-        format!("{} years", years)
-    }
-}
-
 fn fancy_print_generation(generation: &Generation, profile: &Profile, print_marker: bool, print_size: bool) {
     let marker = if generation.marked() { "would remove".red() } else { "would keep".green() };
     let id_str = format!("[{}]", generation.number()).bright_blue();
 
-    print!("{}\t {} old", id_str, format_duration(&generation.age()));
+    print!("{}\t{}", id_str,
+        FmtAge::new(generation.age())
+            .with_suffix::<4>(" old".to_owned())
+            .center_pad());
 
     if print_marker {
         print!(", {}", marker);
@@ -348,8 +316,11 @@ fn fancy_print_generation(generation: &Generation, profile: &Profile, print_mark
 
     if print_size {
         if let Ok(path) = generation.store_path() {
-            let closure_size = size::Size::from_bytes(path.closure_size());
-            print!(" \t{}", format!("[{}]", closure_size).yellow());
+            let closure_size_str = FmtSize::new(path.closure_size())
+                .bracketed()
+                .with_square_brackets()
+                .right_pad();
+            print!(" \t{}", closure_size_str.yellow());
         }
     }
 
@@ -368,14 +339,14 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool) {
         (false, false) => "(other)",
     };
 
-    let age = root.age()
+    let age_str = root.age()
         .ok()
-        .map(format_duration);
+        .map(|a| FmtAge::new(a.clone()).to_string());
 
     let (store_path, size) = if let Ok(store_path) = root.store_path() {
         let store_path_str = store_path.path().to_string_lossy().into();
         if print_size {
-            let closure_size = size::Size::from_bytes(store_path.closure_size());
+            let closure_size = FmtSize::new(store_path.closure_size());
             (store_path_str, Some(closure_size))
         } else {
             (store_path_str, None)
@@ -387,7 +358,7 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool) {
     println!("\n{}", root.link().to_string_lossy());
     println!("{}", format!("  -> {}", store_path).bright_black());
     print!("  ");
-    match age {
+    match age_str {
         Some(age) => print!("age: {}, ", age.bright_blue()),
         None => print!("age: {}, ", "n/a".bright_blue()),
     }
@@ -449,10 +420,10 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
 
         println!();
         println!("Estimated total size: {} ({} store paths)",
-            size::Size::from_bytes(size).to_string().yellow(), paths.len());
+            FmtSize::new(size).to_string().yellow(), paths.len());
         if print_markers {
             println!("  -> after removal:   {} ({} store paths)",
-                size::Size::from_bytes(kept_size).to_string().green(), kept_paths.len());
+                FmtSize::new(kept_size).to_string().green(), kept_paths.len());
         }
     }
 
@@ -462,7 +433,7 @@ fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
 fn remove_generations(profile: &Profile) {
     announce_removal(profile);
     for gen in profile.generations() {
-        let age_str = format_duration(&gen.age());
+        let age_str = FmtAge::new(gen.age()).to_string();
         if gen.marked() {
             println!("{}", format!("-> Removing generation {} ({} old)", gen.number(), age_str).bright_blue());
             resolve(gen.remove());
@@ -690,7 +661,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
     let total_size_naive: u64 = Store::size_naive()?;
     let total_size_hl: u64 = Store::size()?;
-    let total_size = cmp::min(total_size_naive, total_size_hl);
+    let store_size = cmp::min(total_size_naive, total_size_hl);
 
 
     let journal_size = if !args.no_journal && journal::journal_exists() {
@@ -728,24 +699,25 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
 
     eprintln!();
     println!("{}", "=> System:".green());
-    print!("{}:     \t{}", NIX_STORE, size::Size::from_bytes(total_size).to_string().yellow());
+
+    print!("{:<20} {}", format!("{}:", NIX_STORE), FmtSize::new(store_size).left_pad().yellow());
     let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(NIX_STORE))
         .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)));
     if let Ok((dev, size)) = blkdev_info {
-        let percent = 100 * total_size / size;
-        println!("\t({:>2}% of {} ({}))", percent, dev, size::Size::from_bytes(size));
+        let percent_str = FmtPercentage::new(store_size, size).left_pad();
+        println!("\t({} of {} [{}])", percent_str, dev, size::Size::from_bytes(size));
     } else {
         println!();
     }
 
     if let Some(journal_size) = journal_size {
-        print!("{}:\t{}", JOURNAL_PATH, size::Size::from_bytes(journal_size).to_string().yellow());
+        print!("{:<20} {:>11}", format!("{}:", JOURNAL_PATH), FmtSize::new(journal_size).left_pad().yellow());
 
         let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(NIX_STORE))
             .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)));
         if let Ok((dev, size)) = blkdev_info {
-            let percent = 100 * journal_size / size;
-            println!("\t({:>2}% of {} ({}))", percent, dev, size::Size::from_bytes(size));
+            let percent_str = FmtPercentage::new(journal_size, size).left_pad();
+            println!("\t({} of {} [{}])", percent_str, dev, FmtSize::new(size));
         } else {
             println!();
         }
@@ -753,7 +725,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!();
 
     if total_size_naive > total_size_hl {
-        println!("Hardlinking currently saves {}", size::Size::from_bytes(total_size_naive - total_size_hl).to_string().green());
+        println!("Hardlinking currently saves {}.", size::Size::from_bytes(total_size_naive - total_size_hl).to_string().green());
     }
 
 
@@ -761,20 +733,17 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!("{}", "=> Profiles:".green());
 
     for (path, profile, size) in sorted_profiles {
-        let size_str = match size {
-            Some(size) => size::Size::from_bytes(size).to_string(),
-            None => "n/a".to_owned(),
-        };
-        let percentage_str = match size {
-            Some(size) => format!("{}%", 100 * size / total_size),
-            None => "n/a".to_owned(),
-        };
+        let size_str = FmtOrNA::mapped(size, |s| FmtSize::new(s))
+            .left_pad();
+        let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size))
+            .bracketed()
+            .right_pad();
         let generations_str = match profile {
             Some(profile) => format!("[{} generations]", profile.generations().len()),
             None => "n/a".to_owned(),
         };
 
-        println!("{:<50}\t{} ({})\t{}",
+        println!("{:<50} {} {}\t{}",
             path.to_string_lossy(),
             size_str.yellow(),
             percentage_str,
@@ -786,15 +755,12 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!();
     println!("{}", "=> GC Roots:".green());
     for (root, size) in sorted_gc_roots {
-        let size_str = match size {
-            Some(size) => size::Size::from_bytes(size).to_string(),
-            None => "n/a".to_owned(),
-        };
-        let percentage_str = match size {
-            Some(size) => format!("{}%", 100 * size / total_size),
-            None => "n/a".to_owned(),
-        };
-        println!("{:<50}\t{} ({})",
+        let size_str = FmtOrNA::mapped(size, |s| FmtSize::new(s))
+            .left_pad();
+        let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size))
+            .bracketed()
+            .right_pad();
+        println!("{:<50} {:>11} {:<5}",
             root.link().to_string_lossy(),
             size_str.yellow(),
             percentage_str);
