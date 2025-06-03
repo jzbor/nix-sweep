@@ -41,16 +41,6 @@ pub fn dir_size_naive(path: &PathBuf) -> u64 {
     size
 }
 
-pub fn read_link_full(path: &PathBuf) -> Result<PathBuf, String> {
-    if path.is_symlink() {
-        let next = fs::read_link(path)
-            .map_err(|e| e.to_string())?;
-        read_link_full(&next)
-    } else {
-        Ok(path.clone())
-    }
-}
-
 pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
     let inodes = paths.par_iter()
         .map(|p| (p, INODE_CACHE.lookup(p)))

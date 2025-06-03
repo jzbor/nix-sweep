@@ -77,7 +77,8 @@ impl StorePath {
     }
 
     pub fn from_symlink(link: &PathBuf) -> Result<Self, String> {
-        let path = read_link_full(link)?;
+        let path = fs::canonicalize(link)
+            .map_err(|e| e.to_string())?;
         Self::new(path)
     }
 

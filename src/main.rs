@@ -1,6 +1,7 @@
 use std::cmp::{self, Reverse};
 use std::fmt::Display;
 use std::io::Write;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{env, fs, path, process, thread};
@@ -246,7 +247,9 @@ struct ManArgs {
 
 #[derive(Clone, Debug, clap::Args)]
 struct PathInfoArgs {
-    path: path::PathBuf,
+    /// Paths to get information about
+    #[clap(required = true)]
+    paths: Vec<PathBuf>,
 }
 
 
@@ -694,46 +697,50 @@ fn cmd_man(args: ManArgs) -> Result<(), String> {
 }
 
 fn cmd_path_info(args: PathInfoArgs) -> Result<(), String> {
-    let metadata = fs::symlink_metadata(&args.path)
-        .map_err(|e| e.to_string())?;
-    let store_path = StorePath::from_symlink(&args.path)?;
-    let closure = store_path.closure()?;
-    let size = store_path.size();
-    let naive_size = store_path.size_naive();
-    let closure_size = store_path.closure_size();
-    let naive_closure_size = store_path.closure_size_naive();
-    println!();
-    if metadata.is_symlink() {
-        println!("{}", args.path.to_string_lossy());
-        println!("  {}", format!("-> {}", store_path.path().to_string_lossy()).bright_black());
-    } else {
-        println!("{}", store_path.path().to_string_lossy());
+    for path in &args.paths {
+        let metadata = fs::symlink_metadata(path)
+            .map_err(|e| e.to_string())?;
+        let store_path = StorePath::from_symlink(path)?;
+        let closure = store_path.closure()?;
+        let size = store_path.size();
+        let naive_size = store_path.size_naive();
+        let closure_size = store_path.closure_size();
+        let naive_closure_size = store_path.closure_size_naive();
+
+        println!();
+
+        if metadata.is_symlink() {
+            println!("{}", path.to_string_lossy());
+            println!("  {}", format!("-> {}", store_path.path().to_string_lossy()).bright_black());
+        } else {
+            println!("{}", store_path.path().to_string_lossy());
+        }
+
+        println!();
+
+        print!("  size:             {}", FmtSize::new(size).left_pad().bright_yellow());
+        if naive_size > size {
+            print!(" \t{}", FmtSize::new(naive_size)
+                .with_prefix::<18>("hardlinking saves ".to_owned())
+                .bracketed()
+                .right_pad()
+            );
+        }
+        println!();
+
+        print!("  closure size:     {}", FmtSize::new(closure_size).left_pad().yellow());
+        if naive_closure_size > closure_size {
+            print!(" \t{}", FmtSize::new(naive_closure_size - closure_size)
+                .with_prefix::<18>("hardlinking saves ".to_owned())
+                .bracketed()
+                .right_pad()
+            );
+        }
+        println!();
+
+        println!("  paths in closure: {:>align$}", closure.len().to_string().bright_blue(), align = FmtSize::MAX_WIDTH);
+        println!();
     }
-
-    println!();
-
-    print!("  size:             {}", FmtSize::new(size).left_pad().bright_yellow());
-    if naive_size > size {
-        print!(" \t{}", FmtSize::new(naive_size)
-            .with_prefix::<18>("hardlinking saves ".to_owned())
-            .bracketed()
-            .right_pad()
-        );
-    }
-    println!();
-
-    print!("  closure size:     {}", FmtSize::new(closure_size).left_pad().yellow());
-    if naive_closure_size > closure_size {
-        print!(" \t{}", FmtSize::new(naive_closure_size - closure_size)
-            .with_prefix::<18>("hardlinking saves ".to_owned())
-            .bracketed()
-            .right_pad()
-        );
-    }
-    println!();
-
-    println!("  paths in closure: {:>align$}", closure.len().to_string().bright_blue(), align = FmtSize::MAX_WIDTH);
-    println!();
 
     Ok(())
 }
