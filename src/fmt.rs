@@ -202,12 +202,12 @@ impl Display for FmtAge {
 
 impl<const ADD: usize, T: Formattable> Display for FmtPrefix<ADD, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.1, self.0.to_string())
+        write!(f, "{}{}", self.1, self.0)
     }
 }
 
 impl<const ADD: usize, T: Formattable> Display for FmtSuffix<ADD, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.0.to_string(), self.1)
+        write!(f, "{}{}", self.0, self.1)
     }
 }

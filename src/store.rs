@@ -140,7 +140,7 @@ impl StorePath {
        self.closure().unwrap_or_default()
             .iter()
             .map(|sp| sp.path())
-            .map(|p| dir_size_naive(p))
+            .map(dir_size_naive)
             .sum()
     }
 }

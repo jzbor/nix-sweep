@@ -22,7 +22,9 @@ pub fn dir_size_naive(path: &PathBuf) -> u64 {
     };
     let ft = metadata.file_type();
 
-    let size = if ft.is_dir() {
+    
+
+    if ft.is_dir() {
         let read_dir = match fs::read_dir(path) {
             Ok(rd) => rd,
             Err(_) => return 0,
@@ -36,9 +38,7 @@ pub fn dir_size_naive(path: &PathBuf) -> u64 {
         metadata.len()
     } else {
         0
-    };
-
-    size
+    }
 }
 
 pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
@@ -99,16 +99,16 @@ fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
     let ft = metadata.file_type();
 
     if ft.is_dir() {
-        let read_dir = match fs::read_dir(&path) {
+        let read_dir = match fs::read_dir(path) {
             Ok(rd) => rd,
             Err(_) => return HashMap::default(),
         };
-        let inodes = read_dir.into_iter()
+        
+        read_dir.into_iter()
             .par_bridge()
             .flatten()
             .map(|e| dir_size_hl_helper(&e.path()))
-            .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
-        inodes
+            .reduce(HashMap::default, |mut last, next| { last.extend(next); last })
     } else if ft.is_file() {
         let mut new = HashMap::default();
         new.insert((metadata.dev(), metadata.ino()), metadata.len());

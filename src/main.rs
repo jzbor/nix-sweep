@@ -380,7 +380,7 @@ fn fancy_print_gc_root(root: &GCRoot, print_size: bool) {
 
     let age_str = root.age()
         .ok()
-        .map(|a| FmtAge::new(a.clone()).to_string());
+        .map(|a| FmtAge::new(*a).to_string());
 
     let (store_path, size) = if let Ok(store_path) = root.store_path() {
         let store_path_str = store_path.path().to_string_lossy().into();
@@ -749,8 +749,8 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     eprintln!("Indexing store...");
     let nstore_paths = Store::all_paths()?.len();
     let (store_size_naive, store_size_hl) = rayon::join(
-        || Store::size_naive(),
-        || Store::size()
+        Store::size_naive,
+        Store::size
     );
     let store_size_naive = store_size_naive?;
     let store_size_hl = store_size_hl?;
@@ -829,7 +829,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!();
     println!("{}", "=> Profiles:".green());
     for (path, profile, size) in sorted_profiles {
-        let size_str = FmtOrNA::mapped(size, |s| FmtSize::new(s))
+        let size_str = FmtOrNA::mapped(size, FmtSize::new)
             .left_pad();
         let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
             .or_empty()
@@ -851,7 +851,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     println!();
     println!("{}", "=> GC Roots:".green());
     for (root, size) in sorted_gc_roots {
-        let size_str = FmtOrNA::mapped(size, |s| FmtSize::new(s))
+        let size_str = FmtOrNA::mapped(size, FmtSize::new)
             .left_pad();
         let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
             .or_empty()
