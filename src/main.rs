@@ -839,7 +839,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
             None => "n/a".to_owned(),
         };
 
-        println!("{:<50} {} {}\t{}",
+        println!("{:<48}\t{} {}    {}",
             path.to_string_lossy(),
             size_str.yellow(),
             percentage_str,
@@ -856,7 +856,7 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
         let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
             .or_empty()
             .right_pad();
-        println!("{:<50} {:>11} {:<5}",
+        println!("{:<48}\t{} {}",
             root.link().to_string_lossy(),
             size_str.yellow(),
             percentage_str);
