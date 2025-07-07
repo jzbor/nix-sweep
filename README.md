@@ -39,3 +39,7 @@ nix-sweep -p housekeeping system
 nix-sweep -p only-remove-really-old system
 nix-sweep -p nuke-everything system
 ```
+
+## Contributing
+Code contributions (pull request) are **currently not accepted**.
+If you have any feedback, ideas or bugreports feel free to open a [new issue](https://github.com/jzbor/nix-sweep/issues/new)
