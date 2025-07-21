@@ -423,7 +423,7 @@ fn announce_listing(profile: &Profile) {
 }
 
 fn announce_removal(profile: &Profile) {
-    format!("=> Removing old generations for profile {}", profile.path().to_string_lossy()).to_string().green();
+    println!("{}", format!("=> Removing old generations for profile {}", profile.path().to_string_lossy()).to_string().green());
 }
 
 fn list_generations(profile: &Profile, print_size: bool, print_markers: bool) {
@@ -532,8 +532,9 @@ fn cmd_cleanout(args: CleanoutArgs) -> Result<(), String> {
             list_generations(&profile, !args.no_size, true);
 
             let confirmation = ask("Do you want to delete the marked generations?", false);
+            println!();
             if confirmation {
-            remove_generations(&profile);
+                remove_generations(&profile);
             } else {
                 println!("-> Not touching profile\n");
             }
