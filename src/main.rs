@@ -124,6 +124,14 @@ struct AnalyzeArgs {
     /// Don't analyze system journal
     #[clap(long)]
     no_journal: bool,
+
+    /// Show all gc-roots and profiles
+    #[clap(short, long)]
+    all: bool,
+
+    /// Show n gc-roots and profiles
+    #[clap(long, default_value_t = 5)]
+    show: usize,
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -774,6 +782,11 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     }
     sorted_profiles.par_sort_by_key(|(p, _, _)| p.clone());
     sorted_profiles.par_sort_by_key(|(_, _, s)| Reverse(*s));
+    let drained_profiles = if !args.all {
+        sorted_profiles.drain(cmp::min(args.show, sorted_profiles.len())..).count()
+    } else {
+        0
+    };
 
     eprintln!("Indexing gc roots...");
     let gc_roots: Vec<_> = roots::gc_roots(false)?
@@ -790,6 +803,11 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
     }
     sorted_gc_roots.par_sort_by_key(|(p, _)| p.link().clone());
     sorted_gc_roots.par_sort_by_key(|(_, s)| Reverse(*s));
+    let drained_gc_roots = if !args.all {
+        sorted_gc_roots.drain(cmp::min(args.show, sorted_gc_roots.len())..).count()
+    } else {
+        0
+    };
 
 
     eprintln!();
@@ -846,6 +864,9 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
             generations_str.bright_blue(),
         );
     }
+    if drained_profiles != 0 {
+        println!("...and {} more", drained_profiles);
+    }
 
 
     println!();
@@ -860,6 +881,9 @@ fn cmd_analyze(args: AnalyzeArgs) -> Result<(), String> {
             root.link().to_string_lossy(),
             size_str.yellow(),
             percentage_str);
+    }
+    if drained_gc_roots != 0 {
+        println!("...and {} more", drained_gc_roots);
     }
 
     println!();
