@@ -1,9 +1,10 @@
-use std::fs;
+use smol::fs;
 use std::num;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
-use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
+use async_recursion::async_recursion;
+use smol::stream::StreamExt;
 
 use crate::caching::Cache;
 use crate::HashMap;
@@ -15,24 +16,29 @@ type Ino = u64;
 type DevId = u64;
 type InoKey = (DevId, Ino);
 
-pub fn dir_size_naive(path: &PathBuf) -> u64 {
+
+#[async_recursion]
+pub async fn dir_size_naive(path: &PathBuf) -> u64 {
     let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
         Err(_) => return 0,
     };
     let ft = metadata.file_type();
 
-    
-
     if ft.is_dir() {
-        let read_dir = match fs::read_dir(path) {
+        let read_dir = match fs::read_dir(path).await {
             Ok(rd) => rd,
             Err(_) => return 0,
         };
-        read_dir.into_iter()
-            .flatten()
-            .par_bridge()
-            .map(|entry| dir_size_naive(&entry.path()))
+
+        let results: Vec<_> = read_dir
+            .filter(|entry| entry.is_ok())
+            .map(|entry| entry.unwrap())
+            .map(async |entry| dir_size_naive(&entry.path()).await)
+            .collect()
+            .await;
+        futures::future::join_all(results).await
+            .into_iter()
             .sum()
     } else if ft.is_file() {
         metadata.len()
@@ -41,21 +47,26 @@ pub fn dir_size_naive(path: &PathBuf) -> u64 {
     }
 }
 
-pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
-    let inodes = paths.par_iter()
+pub async fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
+    let mut inodes = HashMap::default();
+    let mut stream = smol::stream::iter(paths)
         .map(|p| (p, INODE_CACHE.lookup(p)))
-        .map(|(p, inoo)| match inoo {
+        .map(async |(p, inoo)| match inoo {
             Some(inodes) => inodes,
-            None => INODE_CACHE.insert_inline(p.clone(), dir_size_hl_helper(p)),
-        })
-        .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
+            None => INODE_CACHE.insert_inline(p.clone(), dir_size_hl_helper(p.clone()).await),
+        });
+
+    while let Some(e) = stream.next().await {
+        inodes.extend(e.await)
+    }
+
     inodes.values().sum()
 }
 
-pub fn dir_size_considering_hardlinks(path: &PathBuf) -> u64 {
+pub async fn dir_size_considering_hardlinks(path: &PathBuf) -> u64 {
     let inodes = match INODE_CACHE.lookup(path) {
         Some(inodes) => inodes,
-        None => INODE_CACHE.insert_inline(path.clone(), dir_size_hl_helper(path)),
+        None => INODE_CACHE.insert_inline(path.clone(), dir_size_hl_helper(path.clone()).await),
     };
     inodes.values().sum()
 }
@@ -67,8 +78,8 @@ pub fn blkdev_of_path(path: &Path) -> Result<String, String> {
     find_blkdev(dev)
 }
 
-pub fn find_blkdev(id: u64) -> Result<String, String> {
-    fs::read_dir("/dev")
+fn find_blkdev(id: u64) -> Result<String, String> {
+    std::fs::read_dir("/dev")
         .unwrap()
         .flatten()
         .flat_map(|e| e.path().file_name().map(|n| (e, n.to_string_lossy().to_string())))
@@ -81,7 +92,7 @@ pub fn find_blkdev(id: u64) -> Result<String, String> {
 
 pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
     let size_file_path = PathBuf::from(&format!("/sys/class/block/{}/size", name));
-    fs::read_to_string(size_file_path)
+    std::fs::read_to_string(size_file_path)
         .map_err(|e| e.to_string())?
         .lines()
         .next()
@@ -91,25 +102,27 @@ pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
         .map(|n: u64| n * 512)
 }
 
-fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
-    let metadata = match path.symlink_metadata() {
+#[async_recursion]
+async fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
+    let metadata = match fs::symlink_metadata(&path).await {
         Ok(meta) => meta,
         Err(_) => return HashMap::default(),
     };
-    let ft = metadata.file_type();
 
-    if ft.is_dir() {
-        let read_dir = match fs::read_dir(path) {
+    if metadata.is_dir() {
+        let mut readdir = match fs::read_dir(path).await {
             Ok(rd) => rd,
             Err(_) => return HashMap::default(),
         };
-        
-        read_dir.into_iter()
-            .par_bridge()
-            .flatten()
-            .map(|e| dir_size_hl_helper(&e.path()))
-            .reduce(HashMap::default, |mut last, next| { last.extend(next); last })
-    } else if ft.is_file() {
+
+        let mut acc = HashMap::default();
+
+        while let Ok(Some(entry)) = readdir.try_next().await {
+            acc.extend(dir_size_hl_helper(entry.path()).await);
+        }
+
+        acc
+    } else if metadata.is_file() {
         let mut new = HashMap::default();
         new.insert((metadata.dev(), metadata.ino()), metadata.len());
         new
@@ -117,4 +130,3 @@ fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
         HashMap::default()
     }
 }
-

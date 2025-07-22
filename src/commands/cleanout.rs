@@ -38,7 +38,7 @@ pub struct CleanoutCommand {
 }
 
 impl super::Command for CleanoutCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         self.cleanout_config.validate()?;
         let config = ConfigPreset::load(&self.preset, self.config)?
             .override_with(&self.cleanout_config);
@@ -51,9 +51,9 @@ impl super::Command for CleanoutCommand {
             profile.apply_markers(&config);
 
             if self.dry_run {
-                profile.list_generations(!self.no_size, true);
+                profile.list_generations(!self.no_size, true).await;
             } else if interactive {
-                profile.list_generations(!self.no_size, true);
+                profile.list_generations(!self.no_size, true).await;
 
                 let confirmation = ask("Do you want to delete the marked generations?", false);
                 println!();
@@ -69,7 +69,7 @@ impl super::Command for CleanoutCommand {
 
         if config.gc == Some(true) {
             let gc_cmd = GCCommand::new(interactive, self.dry_run);
-            gc_cmd.run()?;
+            gc_cmd.run().await?;
         }
 
         Ok(())

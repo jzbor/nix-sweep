@@ -99,7 +99,7 @@ impl GCRoot {
     }
 
 
-    pub fn print_fancy(&self, print_size: bool) {
+    pub async fn print_fancy(&self, print_size: bool) {
         let attributes = match (self.is_profile(), self.is_current()) {
             (true, true) => "(profile, current)",
             (true, false) => "(profile)",
@@ -114,7 +114,7 @@ impl GCRoot {
         let (store_path, size) = if let Ok(store_path) = self.store_path() {
             let store_path_str = store_path.path().to_string_lossy().into();
             if print_size {
-                let closure_size = FmtSize::new(store_path.closure_size());
+                let closure_size = FmtSize::new(store_path.closure_size().await);
                 (store_path_str, Some(closure_size))
             } else {
                 (store_path_str, None)

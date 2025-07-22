@@ -9,7 +9,7 @@ pub struct ManCommand {
 }
 
 impl super::Command for ManCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         // export main
         let man = clap_mangen::Man::new(crate::Args::command());
         let mut buffer: Vec<u8> = Default::default();

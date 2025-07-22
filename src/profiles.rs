@@ -192,7 +192,7 @@ impl Profile {
     }
 
 
-    pub fn list_generations(&self, print_size: bool, print_markers: bool) {
+    pub async fn list_generations(&self, print_size: bool, print_markers: bool) {
         announce_listing(self);
 
         let store_paths: Vec<_> = self.generations().iter()
@@ -200,7 +200,7 @@ impl Profile {
             .collect();
 
         for gen in self.generations() {
-            gen.print_fancy(self.is_active_generation(gen), print_markers, print_size);
+            gen.print_fancy(self.is_active_generation(gen), print_markers, print_size).await;
         }
 
         if print_size {
@@ -227,8 +227,8 @@ impl Profile {
             let kept_dirs: Vec<_> = kept_paths.iter().map(|sp| sp.path())
                 .cloned()
                 .collect();
-            let size = dir_size_considering_hardlinks_all(&dirs);
-            let kept_size = dir_size_considering_hardlinks_all(&kept_dirs);
+            let size = dir_size_considering_hardlinks_all(&dirs).await;
+            let kept_size = dir_size_considering_hardlinks_all(&kept_dirs).await;
 
 
             println!();
@@ -267,13 +267,13 @@ impl Profile {
         Ok(full_closure)
     }
 
-    pub fn full_closure_size(&self) -> Result<u64, String> {
+    pub async fn full_closure_size(&self) -> Result<u64, String> {
         let full_closure: Vec<_> = self.full_closure()?
             .iter()
             .map(|sp| sp.path())
             .cloned()
             .collect();
-        Ok(dir_size_considering_hardlinks_all(&full_closure))
+        Ok(dir_size_considering_hardlinks_all(&full_closure).await)
     }
 }
 
@@ -367,7 +367,7 @@ impl Generation {
         }
     }
 
-    pub fn print_fancy(&self, active: bool, print_marker: bool, print_size: bool) {
+    pub async fn print_fancy(&self, active: bool, print_marker: bool, print_size: bool) {
         let marker = if self.marked() { "would remove".red() } else { "would keep".green() };
         let id_str = format!("[{}]", self.number()).bright_blue();
 
@@ -382,7 +382,7 @@ impl Generation {
 
         if print_size {
             if let Ok(path) = self.store_path() {
-                let closure_size_str = FmtSize::new(path.closure_size())
+                let closure_size_str = FmtSize::new(path.closure_size().await)
                     .bracketed()
                     .with_square_brackets()
                     .right_pad();

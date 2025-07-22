@@ -28,21 +28,21 @@ pub struct AnalyzeCommand {
 }
 
 impl super::Command for AnalyzeCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         eprintln!("Indexing store...");
         let nstore_paths = Store::all_paths()?.len();
         let (store_size_naive, store_size_hl) = rayon::join(
             Store::size_naive,
             Store::size
         );
-        let store_size_naive = store_size_naive?;
-        let store_size_hl = store_size_hl?;
+        let store_size_naive = store_size_naive.await?;
+        let store_size_hl = store_size_hl.await?;
         let store_size = cmp::min(store_size_naive, store_size_hl);
 
 
         let journal_size = if !self.no_journal && journal_exists() {
             eprintln!("Indexing system journal...");
-            Some(journal_size())
+            Some(journal_size().await)
         } else { None };
 
 
@@ -51,8 +51,10 @@ impl super::Command for AnalyzeCommand {
         let mut sorted_profiles = Vec::with_capacity(profile_paths.len());
         for path in profile_paths {
             let profile = Profile::from_path(path.clone()).ok();
-            let size = profile.as_ref()
-                .and_then(|p| Profile::full_closure_size(p).ok());
+            let size = match &profile {
+                Some(p) => p.full_closure_size().await.ok(),
+                None => None,
+            };
             sorted_profiles.push((path, profile, size));
         }
         sorted_profiles.par_sort_by_key(|(p, _, _)| p.clone());
@@ -71,7 +73,7 @@ impl super::Command for AnalyzeCommand {
         let mut sorted_gc_roots = Vec::with_capacity(gc_roots.len());
         for root in gc_roots {
             let item = match root.store_path().cloned() {
-                Ok(path) => (root, Some(path.closure_size())),
+                Ok(path) => (root, Some(path.closure_size().await)),
                 Err(_) => (root, None),
             };
             sorted_gc_roots.push(item);

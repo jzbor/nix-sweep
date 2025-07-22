@@ -8,5 +8,5 @@ pub mod path_info;
 pub mod tidyup_gc_roots;
 
 pub trait Command: clap::Args {
-    fn run(self) -> Result<(), String>;
+    async fn run(self) -> Result<(), String>;
 }

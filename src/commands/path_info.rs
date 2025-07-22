@@ -15,16 +15,16 @@ pub struct PathInfoCommand {
 }
 
 impl super::Command for PathInfoCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         for path in &self.paths {
             let metadata = fs::symlink_metadata(path)
                 .map_err(|e| e.to_string())?;
             let store_path = StorePath::from_symlink(path)?;
             let closure = store_path.closure()?;
-            let size = store_path.size();
-            let naive_size = store_path.size_naive();
-            let closure_size = store_path.closure_size();
-            let naive_closure_size = store_path.closure_size_naive();
+            let size = store_path.size().await;
+            let naive_size = store_path.size_naive().await;
+            let closure_size = store_path.closure_size().await;
+            let naive_closure_size = store_path.closure_size_naive().await;
 
             println!();
 

@@ -11,6 +11,6 @@ pub fn journal_exists() -> bool {
         .unwrap_or(false)
 }
 
-pub fn journal_size() -> u64 {
-    files::dir_size_naive(&PathBuf::from(JOURNAL_PATH))
+pub async fn journal_size() -> u64 {
+    files::dir_size_naive(&PathBuf::from(JOURNAL_PATH)).await
 }

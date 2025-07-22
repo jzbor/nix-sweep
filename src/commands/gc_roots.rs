@@ -43,7 +43,7 @@ pub struct GCRootsCommand {
 }
 
 impl super::Command for GCRootsCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         let mut roots = roots::gc_roots(self.include_missing)?;
         roots.par_sort_by_key(|r| r.link().clone());
         roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
@@ -80,7 +80,7 @@ impl super::Command for GCRootsCommand {
                     .unwrap_or(String::from("n/a"));
                 println!("{}\t{}", root.link().to_string_lossy(), path);
             } else {
-                root.print_fancy(!self.no_size);
+                root.print_fancy(!self.no_size).await;
             }
         }
 

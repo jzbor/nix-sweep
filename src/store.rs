@@ -3,6 +3,7 @@ use std::{fs, process};
 use std::path::{Path, PathBuf};
 
 use rayon::slice::ParallelSliceMut;
+use smol::stream::StreamExt;
 
 use crate::caching::Cache;
 use crate::files::*;
@@ -52,17 +53,22 @@ impl Store {
         is_in_store && has_sufficient_length && starts_with_hash
     }
 
-    pub fn size_naive() -> Result<u64, String> {
-        let total_size: u64 = Store::all_paths()?
-            .iter()
-            .map(|sp| sp.size_naive())
+    pub async fn size_naive() -> Result<u64, String> {
+        let sizes: Vec<_> = smol::stream::iter(Store::all_paths()?.into_iter())
+            .map(async |sp| sp.size_naive().await)
+            .collect()
+            .await;
+
+        let size = futures::future::join_all(sizes.into_iter())
+            .await
+            .into_iter()
             .sum();
-        Ok(total_size)
+        Ok(size)
     }
 
-    pub fn size() -> Result<u64, String> {
+    pub async fn size() -> Result<u64, String> {
         let store_path = std::path::PathBuf::from(NIX_STORE);
-        let size = dir_size_considering_hardlinks(&store_path);
+        let size = dir_size_considering_hardlinks(&store_path).await;
         Ok(size)
     }
 }
@@ -86,12 +92,12 @@ impl StorePath {
         &self.0
     }
 
-    pub fn size(&self) -> u64 {
-        dir_size_considering_hardlinks(&self.0)
+    pub async fn size(&self) -> u64 {
+        dir_size_considering_hardlinks(&self.0).await
     }
 
-    pub fn size_naive(&self) -> u64 {
-        dir_size_naive(&self.0)
+    pub async fn size_naive(&self) -> u64 {
+        dir_size_naive(&self.0).await
     }
 
     pub fn closure(&self) -> Result<Vec<StorePath>, String> {
@@ -127,20 +133,24 @@ impl StorePath {
         Ok(closure)
     }
 
-    pub fn closure_size(&self) -> u64 {
+    pub async fn closure_size(&self) -> u64 {
         let closure: Vec<_> = self.closure().unwrap_or_default()
             .iter()
             .map(|sp| sp.path())
             .cloned()
             .collect();
-        dir_size_considering_hardlinks_all(&closure)
+        dir_size_considering_hardlinks_all(&closure).await
     }
 
-    pub fn closure_size_naive(&self) -> u64 {
-       self.closure().unwrap_or_default()
-            .iter()
-            .map(|sp| sp.path())
-            .map(dir_size_naive)
+    pub async fn closure_size_naive(&self) -> u64 {
+       let sizes: Vec<_> = smol::stream::iter(self.closure().unwrap_or_default())
+            .map(|sp| sp.path().clone())
+            .map(async |sp| dir_size_naive(&sp).await)
+            .collect()
+            .await;
+        futures::future::join_all(sizes.into_iter())
+            .await
+            .into_iter()
             .sum()
     }
 }

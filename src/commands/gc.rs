@@ -26,7 +26,7 @@ impl GCCommand {
 }
 
 impl super::Command for GCCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         if self.dry_run {
             println!("\n{}", "=> Skipping garbage collection (dry run)".green());
         } else {

@@ -23,7 +23,7 @@ pub struct GenerationsCommand {
 }
 
 impl super::Command for GenerationsCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         for profile_str in self.profiles {
             let profile = Profile::from_str(&profile_str)?;
 
@@ -32,7 +32,7 @@ impl super::Command for GenerationsCommand {
                     println!("{}", gen.path().to_string_lossy());
                 }
             } else {
-                profile.list_generations(!self.no_size, false);
+                profile.list_generations(!self.no_size, false).await;
             }
         }
 

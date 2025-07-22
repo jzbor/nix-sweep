@@ -43,7 +43,7 @@ pub struct TidyupGCRootsCommand {
 }
 
 impl super::Command for TidyupGCRootsCommand {
-    fn run(self) -> Result<(), String> {
+    async fn run(self) -> Result<(), String> {
         let roots = roots::gc_roots(self.include_missing)?;
 
         let mut roots: Vec<_> = roots.into_iter().collect();
@@ -77,7 +77,7 @@ impl super::Command for TidyupGCRootsCommand {
 
 
             if !self.force {
-                root.print_fancy(!self.no_size);
+                root.print_fancy(!self.no_size).await;
             }
 
             if root.store_path().is_err() {

@@ -92,15 +92,19 @@ fn main() {
     resolve(init_rayon());
 
     use Subcommand::*;
-    let res = match config.subcommand {
-        Analyze(cmd) => cmd.run(),
-        Cleanout(cmd) => cmd.run(),
-        GC(cmd) => cmd.run(),
-        GCRoots(cmd) => cmd.run(),
-        Generations(cmd) => cmd.run(),
-        Man(cmd) => cmd.run(),
-        PathInfo(cmd) => cmd.run(),
-        TidyupGCRoots(cmd) => cmd.run(),
-    };
+
+
+    let res = smol::block_on(async {
+        match config.subcommand {
+            Analyze(cmd) => cmd.run().await,
+            Cleanout(cmd) => cmd.run().await,
+            GC(cmd) => cmd.run().await,
+            GCRoots(cmd) => cmd.run().await,
+            Generations(cmd) => cmd.run().await,
+            Man(cmd) => cmd.run().await,
+            PathInfo(cmd) => cmd.run().await,
+            TidyupGCRoots(cmd) => cmd.run().await,
+        }
+    });
     resolve(res);
 }
