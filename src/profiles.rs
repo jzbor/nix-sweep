@@ -1,18 +1,25 @@
 use std::env;
 use std::fs;
+use std::path;
 use std::path::Component;
 use std::process;
 use std::str;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use colored::Colorize;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rayon::slice::ParallelSliceMut;
 
 use crate::config;
 use crate::files::dir_size_considering_hardlinks_all;
+use crate::fmt::FmtAge;
+use crate::fmt::FmtSize;
+use crate::fmt::Formattable;
+use crate::interaction::announce_listing;
 use crate::store::StorePath;
 
 
@@ -184,6 +191,59 @@ impl Profile {
             .ok_or("Cannot find current generation".to_owned())
     }
 
+
+    pub fn list_generations(&self, print_size: bool, print_markers: bool) {
+        announce_listing(self);
+
+        let store_paths: Vec<_> = self.generations().iter()
+            .flat_map(|g| g.store_path())
+            .collect();
+
+        for gen in self.generations() {
+            gen.print_fancy(self.is_active_generation(gen), print_markers, print_size);
+        }
+
+        if print_size {
+            let mut paths: Vec<_> = store_paths.par_iter()
+                .flat_map(|sp| sp.closure())
+                .flatten()
+                .collect();
+            let mut kept_paths: Vec<_> = self.generations().par_iter()
+                .filter(|g| !g.marked())
+                .flat_map(|g| g.store_path())
+                .flat_map(|sp| sp.closure())
+                .flatten()
+                .collect();
+
+            paths.par_sort_by_key(|p| p.path().clone());
+            paths.dedup_by_key(|p| p.path().clone());
+
+            kept_paths.par_sort_by_key(|p| p.path().clone());
+            kept_paths.dedup_by_key(|p| p.path().clone());
+
+            let dirs: Vec<_> = paths.iter().map(|sp| sp.path())
+                .cloned()
+                .collect();
+            let kept_dirs: Vec<_> = kept_paths.iter().map(|sp| sp.path())
+                .cloned()
+                .collect();
+            let size = dir_size_considering_hardlinks_all(&dirs);
+            let kept_size = dir_size_considering_hardlinks_all(&kept_dirs);
+
+
+            println!();
+            println!("Estimated total size: {} ({} store paths)",
+                FmtSize::new(size).to_string().yellow(), paths.len());
+            if print_markers {
+                println!("  -> after removal:   {} ({} store paths)",
+                    FmtSize::new(kept_size).to_string().green(), kept_paths.len());
+            }
+        }
+
+        println!();
+    }
+
+
     pub fn is_active_generation(&self, generation: &Generation) -> bool {
         let active = match self.active_generation() {
             Ok(gen) => gen,
@@ -250,6 +310,8 @@ impl Generation {
         })
     }
 
+
+
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -304,6 +366,36 @@ impl Generation {
             Err(e) => Err(format!("Removal of generation {} failed ({})", self.number(), e)),
         }
     }
+
+    pub fn print_fancy(&self, active: bool, print_marker: bool, print_size: bool) {
+        let marker = if self.marked() { "would remove".red() } else { "would keep".green() };
+        let id_str = format!("[{}]", self.number()).bright_blue();
+
+        print!("{}\t{}", id_str,
+            FmtAge::new(self.age())
+                .with_suffix::<4>(" old".to_owned())
+                .left_pad());
+
+        if print_marker {
+            print!(", {}", marker);
+        }
+
+        if print_size {
+            if let Ok(path) = self.store_path() {
+                let closure_size_str = FmtSize::new(path.closure_size())
+                    .bracketed()
+                    .with_square_brackets()
+                    .right_pad();
+                print!(" \t{}", closure_size_str.yellow());
+            }
+        }
+
+        if active {
+            print!("\t<- active");
+        }
+
+        println!();
+    }
 }
 
 impl Ord for Generation {
@@ -321,5 +413,22 @@ impl PartialOrd for Generation {
 impl PartialEq for Generation {
     fn eq(&self, other: &Self) -> bool {
         self.path.eq(&other.path)
+    }
+}
+
+impl FromStr for Profile {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "user" => Profile::user(),
+            "home" => Profile::home(),
+            "system" => Profile::system(),
+            other => {
+                let path = path::PathBuf::from_str(other)
+                    .map_err(|e| e.to_string())?;
+                Profile::from_path(path)
+            },
+        }
     }
 }

@@ -4,10 +4,13 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use colored::Colorize;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rayon::slice::ParallelSliceMut;
 
+use crate::fmt::FmtAge;
+use crate::fmt::FmtSize;
 use crate::store::StorePath;
 
 
@@ -93,6 +96,47 @@ impl GCRoot {
         paths.dedup();
 
         Ok(paths)
+    }
+
+
+    pub fn print_fancy(&self, print_size: bool) {
+        let attributes = match (self.is_profile(), self.is_current()) {
+            (true, true) => "(profile, current)",
+            (true, false) => "(profile)",
+            (false, true) => "(current)",
+            (false, false) => "(other)",
+        };
+
+        let age_str = self.age()
+            .ok()
+            .map(|a| FmtAge::new(*a).to_string());
+
+        let (store_path, size) = if let Ok(store_path) = self.store_path() {
+            let store_path_str = store_path.path().to_string_lossy().into();
+            if print_size {
+                let closure_size = FmtSize::new(store_path.closure_size());
+                (store_path_str, Some(closure_size))
+            } else {
+                (store_path_str, None)
+            }
+        } else {
+            (String::from("<not accessible>"), None)
+        };
+
+        println!("\n{}", self.link().to_string_lossy());
+        println!("{}", format!("  -> {}", store_path).bright_black());
+        print!("  ");
+        match age_str {
+            Some(age) => print!("age: {}, ", age.bright_blue()),
+            None => print!("age: {}, ", "n/a".bright_blue()),
+        }
+        if print_size {
+            match size {
+                Some(size) => print!("closure size: {}, ", size.to_string().yellow()),
+                None => print!("closure size: {}, ", "n/a".to_string().yellow()),
+            }
+        }
+        println!("type: {}", attributes.blue());
     }
 }
 
