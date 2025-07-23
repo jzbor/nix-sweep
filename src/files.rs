@@ -1,9 +1,15 @@
+use std::collections::HashSet;
 use std::fs;
+use std::fs::File;
 use std::num;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
 use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
+use rustix::cstr;
+use rustix::fs::{openat, Mode, OFlags, RawDir, CWD};
+use rustix::io::Errno;
+use rustix::fd::AsFd;
 
 use crate::caching::Cache;
 use crate::HashMap;
@@ -22,7 +28,7 @@ pub fn dir_size_naive(path: &PathBuf) -> u64 {
     };
     let ft = metadata.file_type();
 
-    
+
 
     if ft.is_dir() {
         let read_dir = match fs::read_dir(path) {
@@ -46,7 +52,7 @@ pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
         .map(|p| (p, INODE_CACHE.lookup(p)))
         .map(|(p, inoo)| match inoo {
             Some(inodes) => inodes,
-            None => INODE_CACHE.insert_inline(p.clone(), dir_size_hl_helper(p)),
+            None => INODE_CACHE.insert_inline(p.clone(), dir_size_hl_helper(p.clone())),
         })
         .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
     inodes.values().sum()
@@ -55,7 +61,7 @@ pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
 pub fn dir_size_considering_hardlinks(path: &PathBuf) -> u64 {
     let inodes = match INODE_CACHE.lookup(path) {
         Some(inodes) => inodes,
-        None => INODE_CACHE.insert_inline(path.clone(), dir_size_hl_helper(path)),
+        None => INODE_CACHE.insert_inline(path.clone(), dir_size_hl_helper(path.clone())),
     };
     inodes.values().sum()
 }
@@ -91,7 +97,7 @@ pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
         .map(|n: u64| n * 512)
 }
 
-fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
+fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
     let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
         Err(_) => return HashMap::default(),
@@ -99,16 +105,64 @@ fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
     let ft = metadata.file_type();
 
     if ft.is_dir() {
-        let read_dir = match fs::read_dir(path) {
-            Ok(rd) => rd,
+        let file = match File::open(&path){
+            Ok(f) => f,
             Err(_) => return HashMap::default(),
         };
-        
-        read_dir.into_iter()
+        let fd = openat(
+            CWD,
+            &path,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        ).unwrap();
+
+        let mut buf = Vec::with_capacity(265);
+        let mut paths = Vec::new();
+
+        'read: loop {
+            'resize: {
+                let mut iter = RawDir::new(&fd, buf.spare_capacity_mut());
+                while let Some(entry) = iter.next() {
+                    let entry = match entry {
+                        Err(Errno::INVAL) => break 'resize,
+                        r => r.unwrap(),
+                    };
+                    let filename = match entry.file_name().to_str() {
+                        Ok(name) => name,
+                        Err(_) => continue,
+                    };
+                    // println!("Adding ({})", filename);
+                    if filename != "." && filename != ".." {
+                        paths.push(path.join(PathBuf::from(filename)));
+                    }
+                }
+                break 'read;
+            }
+
+            eprintln!("Resizing ({:?})", path);
+            let new_capacity = buf.capacity() * 2;
+            buf.reserve(new_capacity);
+        }
+
+        drop(buf);
+        drop(file);
+
+        paths.into_iter()
             .par_bridge()
-            .flatten()
-            .map(|e| dir_size_hl_helper(&e.path()))
+            .map(dir_size_hl_helper)
+            // .fold(HashMap::default(), |mut last, next| { last.extend(next); last })
             .reduce(HashMap::default, |mut last, next| { last.extend(next); last })
+
+        // let read_dir = match fs::read_dir(path) {
+        //     Ok(rd) => rd,
+        //     Err(_) => return HashMap::default(),
+        // };
+
+        // read_dir.into_iter()
+        //     .par_bridge()
+        //     .flatten()
+        //     .map(|e| dir_size_hl_helper(&e.path()))
+        //     .reduce(HashMap::default, |mut last, next| { last.extend(next); last })
     } else if ft.is_file() {
         let mut new = HashMap::default();
         new.insert((metadata.dev(), metadata.ino()), metadata.len());
