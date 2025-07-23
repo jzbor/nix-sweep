@@ -31,12 +31,13 @@ impl super::Command for AnalyzeCommand {
     async fn run(self) -> Result<(), String> {
         eprintln!("Indexing store...");
         let nstore_paths = Store::all_paths()?.len();
-        let (store_size_naive, store_size_hl) = rayon::join(
-            Store::size_naive,
-            Store::size
-        );
-        let store_size_naive = store_size_naive.await?;
-        let store_size_hl = store_size_hl.await?;
+        let (store_size_naive, store_size_hl) = futures::future::join(
+            async { Store::size_naive().await },
+            async { Store::size().await }
+        ).await;
+        let (store_size_naive, store_size_hl) = (store_size_naive?, store_size_hl?);
+        // let store_size_naive = Store::size_naive().await?;
+        // let store_size_hl = Store::size().await?;
         let store_size = cmp::min(store_size_naive, store_size_hl);
 
 

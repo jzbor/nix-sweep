@@ -18,29 +18,37 @@ type InoKey = (DevId, Ino);
 
 
 #[async_recursion]
-pub async fn dir_size_naive(path: &PathBuf) -> u64 {
-    let metadata = match path.symlink_metadata() {
+pub async fn dir_size_naive(path: PathBuf) -> u64 {
+    let metadata = match fs::symlink_metadata(&path).await {
         Ok(meta) => meta,
         Err(_) => return 0,
     };
-    let ft = metadata.file_type();
 
-    if ft.is_dir() {
-        let read_dir = match fs::read_dir(path).await {
+    if metadata.is_dir() {
+        let readdir = match fs::read_dir(path).await {
             Ok(rd) => rd,
             Err(_) => return 0,
         };
 
-        let results: Vec<_> = read_dir
+        let paths: Vec<_> = readdir
             .filter(|entry| entry.is_ok())
-            .map(|entry| entry.unwrap())
-            .map(async |entry| dir_size_naive(&entry.path()).await)
+            .map(|entry| entry.unwrap().path())
             .collect()
             .await;
-        futures::future::join_all(results).await
+
+        let futures: Vec<_> = paths.into_iter()
+            .map(|p| dir_size_naive(p))
+            .collect();
+
+        let vals: Vec<_> = smol::stream::iter(futures.into_iter())
+            .map(async |f| { f.await })
+            .collect()
+            .await;
+
+        futures::future::join_all(vals).await
             .into_iter()
             .sum()
-    } else if ft.is_file() {
+    } else if metadata.is_file() {
         metadata.len()
     } else {
         0
@@ -110,15 +118,20 @@ async fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
     };
 
     if metadata.is_dir() {
-        let mut readdir = match fs::read_dir(path).await {
+        let readdir = match fs::read_dir(path).await {
             Ok(rd) => rd,
             Err(_) => return HashMap::default(),
         };
 
-        let mut acc = HashMap::default();
+        let paths: Vec<_> = readdir
+            .filter(|entry| entry.is_ok())
+            .map(|entry| entry.unwrap().path())
+            .collect()
+            .await;
 
-        while let Ok(Some(entry)) = readdir.try_next().await {
-            acc.extend(dir_size_hl_helper(entry.path()).await);
+        let mut acc = HashMap::default();
+        for path in paths {
+            acc.extend(dir_size_hl_helper(path).await)
         }
 
         acc

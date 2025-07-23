@@ -97,7 +97,7 @@ impl StorePath {
     }
 
     pub async fn size_naive(&self) -> u64 {
-        dir_size_naive(&self.0).await
+        dir_size_naive(self.0.clone()).await
     }
 
     pub fn closure(&self) -> Result<Vec<StorePath>, String> {
@@ -145,7 +145,7 @@ impl StorePath {
     pub async fn closure_size_naive(&self) -> u64 {
        let sizes: Vec<_> = smol::stream::iter(self.closure().unwrap_or_default())
             .map(|sp| sp.path().clone())
-            .map(async |sp| dir_size_naive(&sp).await)
+            .map(async |sp| dir_size_naive(sp).await)
             .collect()
             .await;
         futures::future::join_all(sizes.into_iter())

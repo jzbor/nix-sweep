@@ -46,7 +46,11 @@ impl FmtSize {
 
 impl FmtPercentage {
     pub fn new(amount: u64, total: u64) -> Self {
-        FmtPercentage(amount * 100 / total)
+        if total == 0 {
+            FmtPercentage(0)
+        } else {
+            FmtPercentage(amount * 100 / total)
+        }
     }
 }
 

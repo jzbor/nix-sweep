@@ -12,5 +12,5 @@ pub fn journal_exists() -> bool {
 }
 
 pub async fn journal_size() -> u64 {
-    files::dir_size_naive(&PathBuf::from(JOURNAL_PATH)).await
+    files::dir_size_naive(PathBuf::from(JOURNAL_PATH)).await
 }
