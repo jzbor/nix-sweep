@@ -10,6 +10,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use colored::Colorize;
+use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rayon::slice::ParallelSliceMut;
@@ -20,6 +21,7 @@ use crate::fmt::FmtAge;
 use crate::fmt::FmtSize;
 use crate::fmt::Formattable;
 use crate::interaction::announce_listing;
+use crate::ordered_channel::OrderedChannel;
 use crate::store::StorePath;
 
 
@@ -199,9 +201,29 @@ impl Profile {
             .flat_map(|g| g.store_path())
             .collect();
 
-        for gen in self.generations() {
-            gen.print_fancy(self.is_active_generation(gen), print_markers, print_size);
-        }
+        let ordered_channel: OrderedChannel<_> = OrderedChannel::new();
+        let gens = self.generations();
+        let ngens = gens.len();
+
+        rayon::join( || {
+            gens.par_iter()
+                .enumerate()
+                .map(|(i, gen)| {
+                    let active = self.is_active_generation(gen);
+                    let size = if print_size {
+                        match gen.store_path() {
+                            Ok(sp) => sp.closure_size(),
+                            Err(_) => 0,
+                        }
+                    } else { 0 };
+                    (i, active, size)
+                })
+                .for_each(|tup| ordered_channel.put(tup.0, tup));
+        }, || {
+                for (i, active, size) in ordered_channel.iter(ngens) {
+                    gens[i].print_fancy(active, print_markers, Some(size));
+                }
+        });
 
         if print_size {
             let mut paths: Vec<_> = store_paths.par_iter()
@@ -367,7 +389,7 @@ impl Generation {
         }
     }
 
-    pub fn print_fancy(&self, active: bool, print_marker: bool, print_size: bool) {
+    pub fn print_fancy(&self, active: bool, print_marker: bool, size: Option<u64>) {
         let marker = if self.marked() { "would remove".red() } else { "would keep".green() };
         let id_str = format!("[{}]", self.number()).bright_blue();
 
@@ -380,14 +402,12 @@ impl Generation {
             print!(", {}", marker);
         }
 
-        if print_size {
-            if let Ok(path) = self.store_path() {
-                let closure_size_str = FmtSize::new(path.closure_size())
-                    .bracketed()
-                    .with_square_brackets()
-                    .right_pad();
-                print!(" \t{}", closure_size_str.yellow());
-            }
+        if let Some(size) = size {
+            let closure_size_str = FmtSize::new(size)
+                .bracketed()
+                .with_square_brackets()
+                .right_pad();
+            print!(" \t{}", closure_size_str.yellow());
         }
 
         if active {

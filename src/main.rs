@@ -18,6 +18,7 @@ mod caching;
 mod fmt;
 mod commands;
 mod interaction;
+mod ordered_channel;
 
 
 const THREADS_ENV_VAR: &str = "NIX_SWEEP_NUM_THREADS";
