@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::num;
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
@@ -12,6 +13,7 @@ use rustix::io::Errno;
 use rustix::fd::AsFd;
 
 use crate::caching::Cache;
+use crate::interaction::warn;
 use crate::HashMap;
 
 
@@ -22,6 +24,7 @@ type DevId = u64;
 type InoKey = (DevId, Ino);
 
 pub fn dir_size_naive(path: &PathBuf) -> u64 {
+    return 1;
     let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
         Err(_) => return 0,
@@ -116,7 +119,7 @@ fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
             Mode::empty(),
         ).unwrap();
 
-        let mut buf = Vec::with_capacity(265);
+        let mut buf = Vec::with_capacity(1024);
         let mut paths = Vec::new();
 
         'read: loop {
@@ -139,7 +142,7 @@ fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
                 break 'read;
             }
 
-            eprintln!("Resizing ({:?})", path);
+            warn("Resizing getdent buffer");
             let new_capacity = buf.capacity() * 2;
             buf.reserve(new_capacity);
         }
@@ -161,7 +164,7 @@ fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
         // read_dir.into_iter()
         //     .par_bridge()
         //     .flatten()
-        //     .map(|e| dir_size_hl_helper(&e.path()))
+        //     .map(|e| dir_size_hl_helper(e.path()))
         //     .reduce(HashMap::default, |mut last, next| { last.extend(next); last })
     } else if ft.is_file() {
         let mut new = HashMap::default();
