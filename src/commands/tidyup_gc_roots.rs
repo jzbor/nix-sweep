@@ -3,7 +3,6 @@ use std::fs;
 use std::time::Duration;
 
 use colored::Colorize;
-use rayon::slice::ParallelSliceMut;
 
 use crate::interaction::*;
 use crate::roots;
@@ -47,8 +46,8 @@ impl super::Command for TidyupGCRootsCommand {
         let roots = roots::gc_roots(self.include_missing)?;
 
         let mut roots: Vec<_> = roots.into_iter().collect();
-        roots.par_sort_by_key(|r| r.link().clone());
-        roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
+        roots.sort_by_key(|r| r.link().clone());
+        roots.sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
         for root in roots {
             if !self.include_profiles && root.is_profile() {

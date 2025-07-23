@@ -1,8 +1,6 @@
 use std::cmp::Reverse;
 use std::time::Duration;
 
-use rayon::slice::ParallelSliceMut;
-
 use crate::roots;
 
 #[derive(clap::Args)]
@@ -45,8 +43,8 @@ pub struct GCRootsCommand {
 impl super::Command for GCRootsCommand {
     async fn run(self) -> Result<(), String> {
         let mut roots = roots::gc_roots(self.include_missing)?;
-        roots.par_sort_by_key(|r| r.link().clone());
-        roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
+        roots.sort_by_key(|r| r.link().clone());
+        roots.sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
         for root in roots {
             if !self.include_profiles && root.is_profile() {

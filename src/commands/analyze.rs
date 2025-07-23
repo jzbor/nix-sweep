@@ -2,7 +2,6 @@ use std::cmp::{self, Reverse};
 use std::path;
 
 use colored::Colorize;
-use rayon::slice::ParallelSliceMut;
 
 use crate::files;
 use crate::fmt::*;
@@ -58,8 +57,8 @@ impl super::Command for AnalyzeCommand {
             };
             sorted_profiles.push((path, profile, size));
         }
-        sorted_profiles.par_sort_by_key(|(p, _, _)| p.clone());
-        sorted_profiles.par_sort_by_key(|(_, _, s)| Reverse(*s));
+        sorted_profiles.sort_by_key(|(p, _, _)| p.clone());
+        sorted_profiles.sort_by_key(|(_, _, s)| Reverse(*s));
         let drained_profiles = if !self.all {
             sorted_profiles.drain(cmp::min(self.show, sorted_profiles.len())..).count()
         } else {
@@ -79,8 +78,8 @@ impl super::Command for AnalyzeCommand {
             };
             sorted_gc_roots.push(item);
         }
-        sorted_gc_roots.par_sort_by_key(|(p, _)| p.link().clone());
-        sorted_gc_roots.par_sort_by_key(|(_, s)| Reverse(*s));
+        sorted_gc_roots.sort_by_key(|(p, _)| p.link().clone());
+        sorted_gc_roots.sort_by_key(|(_, s)| Reverse(*s));
         let drained_gc_roots = if !self.all {
             sorted_gc_roots.drain(cmp::min(self.show, sorted_gc_roots.len())..).count()
         } else {

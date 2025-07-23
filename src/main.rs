@@ -2,7 +2,6 @@ use std::cmp;
 use std::{env, thread};
 
 use clap::Parser;
-use rayon::ThreadPoolBuilder;
 
 use crate::commands::Command;
 use crate::interaction::resolve;
@@ -71,40 +70,23 @@ enum Subcommand {
     Man(commands::man::ManCommand),
 }
 
-fn init_rayon() -> Result<(), String> {
-    let nthreads: usize = match env::var(THREADS_ENV_VAR).ok() {
-        Some(n) => n.parse()
-            .map_err(|_| format!("Unable to parse {} environment variable", THREADS_ENV_VAR))?,
-        None => match thread::available_parallelism().ok() {
-            Some(avail) => cmp::min(avail.into(), MAX_THREADS),
-            None => MAX_THREADS,
-        },
-    };
-
-    ThreadPoolBuilder::new()
-        .num_threads(nthreads)
-        .build_global()
-        .map_err(|e| e.to_string())
-}
-
-fn main() {
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+async fn main() {
     let config = Args::parse();
-    resolve(init_rayon());
 
     use Subcommand::*;
 
 
-    let res = smol::block_on(async {
-        match config.subcommand {
-            Analyze(cmd) => cmd.run().await,
-            Cleanout(cmd) => cmd.run().await,
-            GC(cmd) => cmd.run().await,
-            GCRoots(cmd) => cmd.run().await,
-            Generations(cmd) => cmd.run().await,
-            Man(cmd) => cmd.run().await,
-            PathInfo(cmd) => cmd.run().await,
-            TidyupGCRoots(cmd) => cmd.run().await,
-        }
-    });
+    let res = match config.subcommand {
+        Analyze(cmd) => cmd.run().await,
+        Cleanout(cmd) => cmd.run().await,
+        GC(cmd) => cmd.run().await,
+        GCRoots(cmd) => cmd.run().await,
+        Generations(cmd) => cmd.run().await,
+        Man(cmd) => cmd.run().await,
+        PathInfo(cmd) => cmd.run().await,
+        TidyupGCRoots(cmd) => cmd.run().await,
+    };
+
     resolve(res);
 }

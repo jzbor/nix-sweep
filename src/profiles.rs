@@ -10,9 +10,6 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use colored::Colorize;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-use rayon::slice::ParallelSliceMut;
 
 use crate::config;
 use crate::files::dir_size_considering_hardlinks_all;
@@ -204,21 +201,21 @@ impl Profile {
         }
 
         if print_size {
-            let mut paths: Vec<_> = store_paths.par_iter()
+            let mut paths: Vec<_> = store_paths.iter()
                 .flat_map(|sp| sp.closure())
                 .flatten()
                 .collect();
-            let mut kept_paths: Vec<_> = self.generations().par_iter()
+            let mut kept_paths: Vec<_> = self.generations().iter()
                 .filter(|g| !g.marked())
                 .flat_map(|g| g.store_path())
                 .flat_map(|sp| sp.closure())
                 .flatten()
                 .collect();
 
-            paths.par_sort_by_key(|p| p.path().clone());
+            paths.sort_by_key(|p| p.path().clone());
             paths.dedup_by_key(|p| p.path().clone());
 
-            kept_paths.par_sort_by_key(|p| p.path().clone());
+            kept_paths.sort_by_key(|p| p.path().clone());
             kept_paths.dedup_by_key(|p| p.path().clone());
 
             let dirs: Vec<_> = paths.iter().map(|sp| sp.path())
@@ -253,7 +250,7 @@ impl Profile {
     }
 
     pub fn full_closure(&self) -> Result<Vec<StorePath>, String> {
-        let closures: Result<Vec<_>, _> = self.generations.par_iter()
+        let closures: Result<Vec<_>, _> = self.generations.iter()
             .map(|g| g.closure())
             .collect();
         let mut full_closure: Vec<_> = closures?
@@ -261,7 +258,7 @@ impl Profile {
             .flatten()
             .collect();
 
-        full_closure.par_sort_by_key(|p| p.path().clone());
+        full_closure.sort_by_key(|p| p.path().clone());
         full_closure.dedup();
 
         Ok(full_closure)

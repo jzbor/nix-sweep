@@ -2,8 +2,7 @@ use std::str::FromStr;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
-use rayon::slice::ParallelSliceMut;
-use smol::stream::StreamExt;
+use tokio_stream::StreamExt;
 
 use crate::caching::Cache;
 use crate::files::*;
@@ -32,7 +31,7 @@ impl Store {
             .flat_map(StorePath::new)
             .collect();
 
-        paths.par_sort_by_key(|sp| sp.0.clone());
+        paths.sort_by_key(|sp| sp.0.clone());
         paths.dedup();
 
         Ok(paths)
@@ -54,7 +53,7 @@ impl Store {
     }
 
     pub async fn size_naive() -> Result<u64, String> {
-        let sizes: Vec<_> = smol::stream::iter(Store::all_paths()?.into_iter())
+        let sizes: Vec<_> = tokio_stream::iter(Store::all_paths()?.into_iter())
             .map(async |sp| sp.size_naive().await)
             .collect()
             .await;
@@ -143,7 +142,7 @@ impl StorePath {
     }
 
     pub async fn closure_size_naive(&self) -> u64 {
-       let sizes: Vec<_> = smol::stream::iter(self.closure().unwrap_or_default())
+       let sizes: Vec<_> = tokio_stream::iter(self.closure().unwrap_or_default())
             .map(|sp| sp.path().clone())
             .map(async |sp| dir_size_naive(sp).await)
             .collect()

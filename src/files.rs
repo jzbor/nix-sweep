@@ -1,10 +1,12 @@
-use smol::fs;
+use tokio::fs;
+use tokio_stream::wrappers::ReadDirStream;
+use tokio_stream::StreamExt;
+use std::collections::VecDeque;
 use std::num;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
 use async_recursion::async_recursion;
-use smol::stream::StreamExt;
 
 use crate::caching::Cache;
 use crate::HashMap;
@@ -16,48 +18,98 @@ type Ino = u64;
 type DevId = u64;
 type InoKey = (DevId, Ino);
 
-
-#[async_recursion]
-pub async fn dir_size_naive(path: PathBuf) -> u64 {
-    let metadata = match fs::symlink_metadata(&path).await {
-        Ok(meta) => meta,
-        Err(_) => return 0,
-    };
-
-    if metadata.is_dir() {
-        let readdir = match fs::read_dir(path).await {
-            Ok(rd) => rd,
-            Err(_) => return 0,
-        };
-
-        let paths: Vec<_> = readdir
-            .filter(|entry| entry.is_ok())
-            .map(|entry| entry.unwrap().path())
-            .collect()
-            .await;
-
-        let futures: Vec<_> = paths.into_iter()
-            .map(|p| dir_size_naive(p))
-            .collect();
-
-        let vals: Vec<_> = smol::stream::iter(futures.into_iter())
-            .map(async |f| { f.await })
-            .collect()
-            .await;
-
-        futures::future::join_all(vals).await
-            .into_iter()
-            .sum()
-    } else if metadata.is_file() {
-        metadata.len()
-    } else {
-        0
-    }
+enum TaskType {
+    File(PathBuf, Result<std::fs::Metadata, std::io::Error>),
+    Dir(Result<fs::ReadDir, std::io::Error>),
 }
 
+
+
+pub async fn dir_size_naive(path: PathBuf) -> u64 {
+    let mut task_queue = VecDeque::new();
+
+    task_queue.push_back(tokio::task::spawn(async { TaskType::File(path.clone(), fs::symlink_metadata(path).await) } ));
+
+    let mut size = 0;
+    while let Some(task) = task_queue.pop_front() {
+        let task = match task.await {
+            Ok(res) => res,
+            Err(_) => continue,
+        };
+
+        match task {
+            TaskType::File(path, metadata) => {
+                let metadata = match metadata {
+                    Ok(meta) => meta,
+                    Err(_) => continue,
+                };
+                if metadata.is_dir() {
+                    task_queue.push_back(tokio::task::spawn(async { TaskType::Dir(fs::read_dir(path).await) } ));
+                } else if metadata.is_file() {
+                    size += metadata.len();
+                }
+            },
+            TaskType::Dir(readdir) => {
+                let readdir = match readdir {
+                    Ok(rd) => rd,
+                    Err(_) => return 0,
+                };
+
+                let paths: Vec<_> = ReadDirStream::new(readdir)
+                    .filter(|entry| entry.is_ok())
+                    .map(|entry| entry.unwrap().path())
+                    .collect()
+                    .await;
+
+                for path in paths {
+                    task_queue.push_back(tokio::task::spawn(async { TaskType::File(path.clone(), fs::symlink_metadata(path).await) } ));
+                }
+            },
+        }
+
+    }
+
+    size
+}
+// #[async_recursion]
+// pub async fn dir_size_naive(path: PathBuf) -> u64 {
+//     let metadata = match fs::symlink_metadata(&path).await {
+//         Ok(meta) => meta,
+//         Err(_) => return 0,
+//     };
+
+//     if metadata.is_dir() {
+//         let readdir = match fs::read_dir(path).await {
+//             Ok(rd) => rd,
+//             Err(_) => return 0,
+//         };
+
+//         let paths: Vec<_> = ReadDirStream::new(readdir)
+//             .filter(|entry| entry.is_ok())
+//             .map(|entry| entry.unwrap().path())
+//             .collect()
+//             .await;
+
+//         let vals: Vec<_> = tokio_stream::iter(paths)
+//             .map(|p| tokio::task::spawn(async { dir_size_naive(p).await }))
+//             .collect()
+//             .await;
+
+//         futures::future::join_all(vals).await
+//             .into_iter()
+//             .flatten()
+//             .sum()
+//     } else if metadata.is_file() {
+//         metadata.len()
+//     } else {
+//         0
+//     }
+// }
+
 pub async fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
+    return 1;
     let mut inodes = HashMap::default();
-    let mut stream = smol::stream::iter(paths)
+    let mut stream = tokio_stream::iter(paths)
         .map(|p| (p, INODE_CACHE.lookup(p)))
         .map(async |(p, inoo)| match inoo {
             Some(inodes) => inodes,
@@ -123,7 +175,7 @@ async fn dir_size_hl_helper(path: PathBuf) -> HashMap<InoKey, u64> {
             Err(_) => return HashMap::default(),
         };
 
-        let paths: Vec<_> = readdir
+        let paths: Vec<_> = ReadDirStream::new(readdir)
             .filter(|entry| entry.is_ok())
             .map(|entry| entry.unwrap().path())
             .collect()
