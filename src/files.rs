@@ -2,11 +2,17 @@ use std::fs;
 use std::num;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
+use std::sync::mpsc::*;
+use std::sync::RwLock;
 
 use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 
 use crate::caching::Cache;
+use crate::interaction::resolve;
 use crate::HashMap;
+use crate::HashSet;
 
 
 static INODE_CACHE: Cache<PathBuf, HashMap<InoKey, u64>> = Cache::new();
@@ -15,49 +21,56 @@ type Ino = u64;
 type DevId = u64;
 type InoKey = (DevId, Ino);
 
+// pub fn dir_size_naive(path: &PathBuf) -> u64 {
+//     jwalk::WalkDir::new(path).into_iter()
+//         .par_bridge()
+//         .flatten()
+//         .flat_map(|e| e.metadata())
+//         .map(|m| m.len())
+//         .sum()
+// }
+
+
 pub fn dir_size_naive(path: &PathBuf) -> u64 {
+    let counter = AtomicU64::new(0);
+    dir_size_naive_helper(path, &counter);
+    counter.into_inner()
+}
+
+pub fn dir_size_naive_helper(path: &PathBuf, counter: &AtomicU64) {
     let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
-        Err(_) => return 0,
+        Err(_) => return,
     };
     let ft = metadata.file_type();
-
-    
 
     if ft.is_dir() {
         let read_dir = match fs::read_dir(path) {
             Ok(rd) => rd,
-            Err(_) => return 0,
+            Err(_) => return,
         };
         read_dir.into_iter()
             .flatten()
             .par_bridge()
-            .map(|entry| dir_size_naive(&entry.path()))
-            .sum()
+            .for_each(|entry| dir_size_naive_helper(&entry.path(), &counter));
     } else if ft.is_file() {
-        metadata.len()
-    } else {
-        0
+        counter.fetch_add(metadata.len(), std::sync::atomic::Ordering::Relaxed);
     }
 }
 
 pub fn dir_size_considering_hardlinks_all(paths: &[PathBuf]) -> u64 {
-    let inodes = paths.par_iter()
-        .map(|p| (p, INODE_CACHE.lookup(p)))
-        .map(|(p, inoo)| match inoo {
-            Some(inodes) => inodes,
-            None => INODE_CACHE.insert_inline(p.clone(), dir_size_hl_helper(p)),
-        })
-        .reduce(HashMap::default, |mut last, next| { last.extend(next); last });
-    inodes.values().sum()
+    let known = RwLock::new(HashSet::default());
+    let counter = AtomicU64::new(0);
+    paths.par_iter()
+        .for_each(|p| dir_size_hl_helper(p, &known, &counter));
+    counter.into_inner()
 }
 
 pub fn dir_size_considering_hardlinks(path: &PathBuf) -> u64 {
-    let inodes = match INODE_CACHE.lookup(path) {
-        Some(inodes) => inodes,
-        None => INODE_CACHE.insert_inline(path.clone(), dir_size_hl_helper(path)),
-    };
-    inodes.values().sum()
+    let known = RwLock::new(HashSet::default());
+    let counter = AtomicU64::new(0);
+    dir_size_hl_helper(path, &known, &counter);
+    counter.into_inner()
 }
 
 pub fn blkdev_of_path(path: &Path) -> Result<String, String> {
@@ -91,30 +104,30 @@ pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
         .map(|n: u64| n * 512)
 }
 
-fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
+fn dir_size_hl_helper(path: &PathBuf, known: &RwLock<HashSet<InoKey>>, counter: &AtomicU64) {
     let metadata = match path.symlink_metadata() {
         Ok(meta) => meta,
-        Err(_) => return HashMap::default(),
+        Err(_) => return,
     };
     let ft = metadata.file_type();
 
     if ft.is_dir() {
         let read_dir = match fs::read_dir(path) {
             Ok(rd) => rd,
-            Err(_) => return HashMap::default(),
+            Err(_) => return,
         };
-        
+
         read_dir.into_iter()
             .par_bridge()
             .flatten()
-            .map(|e| dir_size_hl_helper(&e.path()))
-            .reduce(HashMap::default, |mut last, next| { last.extend(next); last })
+            .for_each(|e| dir_size_hl_helper(&e.path(), known, counter));
     } else if ft.is_file() {
-        let mut new = HashMap::default();
-        new.insert((metadata.dev(), metadata.ino()), metadata.len());
-        new
-    } else {
-        HashMap::default()
+        let ino_id = (metadata.dev(), metadata.ino());
+        if !known.read().unwrap().contains(&ino_id) {
+            if known.write().unwrap().insert(ino_id) {
+                counter.fetch_add(metadata.len(), std::sync::atomic::Ordering::Relaxed);
+            }
+        }
     }
 }
 
