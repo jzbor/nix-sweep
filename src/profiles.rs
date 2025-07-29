@@ -153,6 +153,15 @@ impl Profile {
             }
         }
 
+        // mark explicitly removed generations
+        for num in &config.generations {
+            let gen = self.generations.iter_mut()
+                .find(|gen| gen.number() == *num);
+            if let Some(gen) = gen {
+                gen.mark();
+            }
+        }
+
         // always unmark newest generation
         if let Some(newest) = self.generations.last_mut() {
             newest.unmark()

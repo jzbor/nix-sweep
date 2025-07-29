@@ -47,11 +47,18 @@ pub struct ConfigPreset {
     #[serde(deserialize_with = "duration_str::deserialize_option_duration")]
     pub remove_older: Option<Duration>,
 
-    /// Ask before removing generations or running garbage collection
+    /// Remove these specific generations
+    ///
+    /// You can pass the option multiple times to remove multiple generations.
+    #[clap(short, long("generation"), id = "GENERATION")]
+    #[serde(skip)]
+    pub generations: Vec<usize>,
+
+    /// Do not ask before removing generations or running garbage collection
     #[clap(short('n'), long("non-interactive"), action = clap::ArgAction::SetFalse)]  // this is very confusing, but works
     pub interactive: Option<bool>,
 
-    /// Do not ask before removing generations or running garbage collection
+    /// Ask before removing generations or running garbage collection
     #[clap(short('i'), long("interactive"), overrides_with = "interactive", action = clap::ArgAction::SetTrue)]
     #[serde(skip_serializing)]
     pub _non_interactive: Option<bool>,
@@ -216,7 +223,11 @@ impl ConfigPreset {
             }
         }
 
-        ConfigPreset { keep_min, keep_max, keep_newer, remove_older, interactive, gc, _non_interactive: None }
+        ConfigPreset {
+            keep_min, keep_max, keep_newer, remove_older,
+            interactive, gc, _non_interactive: None,
+            generations: other.generations.clone()
+        }
     }
 
     pub fn override_with_opt(&self, other: Option<&ConfigPreset>) -> Self {
@@ -236,6 +247,7 @@ impl ConfigPreset {
             interactive: self.interactive,
             _non_interactive: None,
             gc: self.gc,
+            generations: self.generations.clone(),
         }
     }
 }
@@ -250,6 +262,7 @@ impl Default for ConfigPreset {
             interactive: None,
             _non_interactive: None,
             gc: None,
+            generations: Vec::default(),
         }
     }
 }
