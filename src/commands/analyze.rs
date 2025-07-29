@@ -146,10 +146,11 @@ impl super::Command for AnalyzeCommand {
 
         println!();
         println!("{}", "=> GC Roots:".green());
-        for (root, size) in sorted_gc_roots {
-            let size_str = FmtOrNA::mapped(size, FmtSize::new)
+
+        for (root, size) in &sorted_gc_roots {
+            let size_str = FmtOrNA::mapped(*size, FmtSize::new)
                 .left_pad();
-            let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
+            let percentage_str = FmtOrNA::mapped(*size, |s| FmtPercentage::new(s, store_size).bracketed())
                 .or_empty()
                 .right_pad();
             println!("{:<48}\t{} {}",
@@ -160,6 +161,19 @@ impl super::Command for AnalyzeCommand {
         if drained_gc_roots != 0 {
             println!("...and {} more", drained_gc_roots);
         }
+
+        println!();
+        let roots: Vec<_> = sorted_gc_roots.iter().
+            map(|tup| tup.0.clone())
+            .collect();
+        let total_size = GCRoot::full_closure_size(&roots)?;
+        let size_str = FmtSize::new(total_size).to_string();
+        let percentage_str = FmtPercentage::new(total_size, store_size).bracketed()
+            .right_pad();
+        println!("{}\t{} {}",
+            "Total closure size of independent GC Roots:",
+            size_str.yellow(),
+            percentage_str);
 
         println!();
         Ok(())

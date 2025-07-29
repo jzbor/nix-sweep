@@ -5,9 +5,9 @@ use colored::Colorize;
 use rayon::slice::ParallelSliceMut;
 
 use crate::fmt::*;
-use crate::interaction::{announce_gc_roots, resolve};
+use crate::interaction::announce_gc_roots;
 use crate::roots::GCRoot;
-use crate::{roots, HashSet};
+use crate::roots;
 
 #[derive(clap::Args)]
 pub struct GCRootsCommand {
@@ -108,8 +108,8 @@ impl super::Command for GCRootsCommand {
 
         if !self.paths && !self.tsv {
             println!();
-            let full_closure = resolve(GCRoot::full_closure(&roots));
-            let total_size = resolve(GCRoot::full_closure_size(&roots));
+            let full_closure = GCRoot::full_closure(&roots)?;
+            let total_size = GCRoot::full_closure_size(&roots)?;
             println!("Estimated total size: {} ({} store paths)",
                 FmtSize::new(total_size).to_string().yellow(), full_closure.len());
             println!();

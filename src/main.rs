@@ -42,6 +42,10 @@ pub struct Args {
 #[derive(clap::Subcommand)]
 enum Subcommand {
     /// Analyze store usage
+    ///
+    /// This shows the current size and optimization state of the nix store.
+    /// It also displays the current full closure size of profiles and garbage collection roots, as well as
+    /// the percentage of total store space that is used by those closures.
     Analyze(commands::analyze::AnalyzeCommand),
 
     /// Clean out old profile generations

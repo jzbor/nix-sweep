@@ -18,6 +18,7 @@ use crate::HashSet;
 const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
 
 
+#[derive(Clone)]
 pub struct GCRoot {
     link: PathBuf,
     age: Result<Duration, String>,

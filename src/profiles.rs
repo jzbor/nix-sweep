@@ -13,7 +13,6 @@ use colored::Colorize;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
-use rayon::slice::ParallelSliceMut;
 
 use crate::config;
 use crate::files::dir_size_considering_hardlinks_all;
