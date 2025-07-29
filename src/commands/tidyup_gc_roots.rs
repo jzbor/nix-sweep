@@ -50,16 +50,12 @@ impl super::Command for TidyupGCRootsCommand {
         roots.par_sort_by_key(|r| r.link().clone());
         roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
+        let roots = roots.into_iter()
+            .filter(|r| self.include_profiles || !r.is_profile() )
+            .filter(|r| self.include_current || !r.is_current() )
+            .filter(|r| !self.exclude_inaccessible || r.is_accessible());
+
         for root in roots {
-            if !self.include_profiles && root.is_profile() {
-                continue
-            }
-            if !self.include_current && root.is_current() {
-                continue
-            }
-            if self.exclude_inaccessible && !root.is_accessible() {
-                continue
-            }
             if let Some(older) = &self.older {
                 if let Ok(age) = root.age() {
                     if age <= older {
@@ -75,9 +71,14 @@ impl super::Command for TidyupGCRootsCommand {
                 }
             }
 
+            let closure_size = if !self.no_size {
+                root.closure_size().ok()
+            } else {
+                None
+            };
 
             if !self.force {
-                root.print_fancy(!self.no_size);
+                root.print_fancy(closure_size);
             }
 
             if root.store_path().is_err() {

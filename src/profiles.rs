@@ -23,6 +23,7 @@ use crate::fmt::Formattable;
 use crate::interaction::announce_listing;
 use crate::ordered_channel::OrderedChannel;
 use crate::store::StorePath;
+use crate::HashSet;
 
 
 #[derive(Debug)]
@@ -226,22 +227,16 @@ impl Profile {
         });
 
         if print_size {
-            let mut paths: Vec<_> = store_paths.par_iter()
+            let paths: HashSet<_> = store_paths.par_iter()
                 .flat_map(|sp| sp.closure())
                 .flatten()
                 .collect();
-            let mut kept_paths: Vec<_> = self.generations().par_iter()
+            let kept_paths: HashSet<_> = self.generations().par_iter()
                 .filter(|g| !g.marked())
                 .flat_map(|g| g.store_path())
                 .flat_map(|sp| sp.closure())
                 .flatten()
                 .collect();
-
-            paths.par_sort_by_key(|p| p.path().clone());
-            paths.dedup_by_key(|p| p.path().clone());
-
-            kept_paths.par_sort_by_key(|p| p.path().clone());
-            kept_paths.dedup_by_key(|p| p.path().clone());
 
             let dirs: Vec<_> = paths.iter().map(|sp| sp.path())
                 .cloned()
@@ -274,17 +269,14 @@ impl Profile {
         active == generation
     }
 
-    pub fn full_closure(&self) -> Result<Vec<StorePath>, String> {
+    pub fn full_closure(&self) -> Result<HashSet<StorePath>, String> {
         let closures: Result<Vec<_>, _> = self.generations.par_iter()
             .map(|g| g.closure())
             .collect();
-        let mut full_closure: Vec<_> = closures?
+        let full_closure: HashSet<_> = closures?
             .into_iter()
             .flatten()
             .collect();
-
-        full_closure.par_sort_by_key(|p| p.path().clone());
-        full_closure.dedup();
 
         Ok(full_closure)
     }
@@ -366,7 +358,7 @@ impl Generation {
         self.marker
     }
 
-    pub fn closure(&self) -> Result<Vec<StorePath>, String> {
+    pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
         self.store_path().and_then(|sp| sp.closure())
     }
 

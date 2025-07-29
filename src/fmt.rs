@@ -18,7 +18,7 @@ pub trait Formattable: Display {
         FmtBracketed::new(self)
     }
 
-    fn with_prefix<const SUFF_LEN: usize>(self, prefix: String) -> FmtPrefix<SUFF_LEN, Self> where Self: Sized {
+    fn with_prefix<const PREF_LEN: usize>(self, prefix: String) -> FmtPrefix<PREF_LEN, Self> where Self: Sized {
         FmtPrefix::new(self, prefix)
     }
 

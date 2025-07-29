@@ -5,11 +5,11 @@ use std::path::{Path, PathBuf};
 use rayon::slice::ParallelSliceMut;
 
 use crate::caching::Cache;
-use crate::files::*;
+use crate::{files::*, HashSet};
 
 
 pub const NIX_STORE: &str = "/nix/store";
-static CLOSURE_CACHE: Cache<StorePath, Vec<StorePath>> = Cache::new();
+static CLOSURE_CACHE: Cache<StorePath, HashSet<StorePath>> = Cache::new();
 
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
@@ -94,7 +94,7 @@ impl StorePath {
         dir_size_naive(&self.0)
     }
 
-    pub fn closure(&self) -> Result<Vec<StorePath>, String> {
+    pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
         if let Some(closure) = CLOSURE_CACHE.lookup(self) {
             return Ok(closure);
         }
@@ -115,7 +115,7 @@ impl StorePath {
             }
         }
 
-        let closure: Vec<_> = String::from_utf8(output.stdout)
+        let closure: HashSet<_> = String::from_utf8(output.stdout)
             .map_err(|e| e.to_string())?
             .lines()
             .map(PathBuf::from_str)

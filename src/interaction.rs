@@ -58,11 +58,19 @@ pub fn ack(question: &str) {
     }
 }
 
+fn announce(s: String) {
+    println!("{}", format!("=> {}", s).green());
+}
+
 pub fn announce_listing(profile: &Profile) {
-    println!("{}", format!("=> Listing generations for profile {}", profile.path().to_string_lossy()).to_string().green());
+    announce(format!("Listing generations for profile {}", profile.path().to_string_lossy()));
 }
 
 pub fn announce_removal(profile: &Profile) {
-    println!("{}", format!("=> Removing old generations for profile {}", profile.path().to_string_lossy()).to_string().green());
+    announce(format!("Removing old generations for profile {}", profile.path().to_string_lossy()));
+}
+
+pub fn announce_gc_roots(nroots_total: usize, nroots_listed: usize) {
+    announce(format!("Listing {} gc roots (out of {} total)", nroots_listed, nroots_total));
 }
 

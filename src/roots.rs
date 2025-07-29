@@ -9,9 +9,10 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rayon::slice::ParallelSliceMut;
 
-use crate::fmt::FmtAge;
-use crate::fmt::FmtSize;
+use crate::files::dir_size_considering_hardlinks_all;
+use crate::fmt::*;
 use crate::store::StorePath;
+use crate::HashSet;
 
 
 const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
@@ -98,8 +99,44 @@ impl GCRoot {
         Ok(paths)
     }
 
+    pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
+        self.store_path.clone().and_then(|sp| sp.closure())
+    }
 
-    pub fn print_fancy(&self, print_size: bool) {
+    pub fn closure_size(&self) -> Result<u64, String> {
+        self.store_path.clone().map(|sp| sp.closure_size())
+    }
+
+    pub fn full_closure(roots: &[Self]) -> Result<HashSet<StorePath>, String> {
+        let full_closure: HashSet<_> = roots.par_iter()
+            .flat_map(|r| r.closure())
+            .flatten()
+            .collect();
+        Ok(full_closure)
+    }
+
+    pub fn full_closure_size(roots: &[Self]) -> Result<u64, String> {
+        let full_closure: Vec<_> = Self::full_closure(roots)?
+            .iter()
+            .map(|sp| sp.path())
+            .cloned()
+            .collect();
+        Ok(dir_size_considering_hardlinks_all(&full_closure))
+    }
+
+    pub fn print_concise(&self, closure_size: Option<u64>) {
+        let size_str = FmtOrNA::mapped(closure_size, FmtSize::new)
+            .left_pad();
+        let age_str = FmtOrNA::mapped(self.age().ok(), |s| FmtAge::new(s.clone()).with_suffix::<4>(" old".to_owned()))
+            .or_empty()
+            .right_pad();
+        println!("{:<48}\t{}\t{}",
+            self.link().to_string_lossy(),
+            size_str.yellow(),
+            age_str.bright_blue());
+    }
+
+    pub fn print_fancy(&self, closure_size: Option<u64>) {
         let attributes = match (self.is_profile(), self.is_current()) {
             (true, true) => "(profile, current)",
             (true, false) => "(profile)",
@@ -113,9 +150,8 @@ impl GCRoot {
 
         let (store_path, size) = if let Ok(store_path) = self.store_path() {
             let store_path_str = store_path.path().to_string_lossy().into();
-            if print_size {
-                let closure_size = FmtSize::new(store_path.closure_size());
-                (store_path_str, Some(closure_size))
+            if let Some(closure_size) = closure_size {
+                (store_path_str, Some(FmtSize::new(closure_size)))
             } else {
                 (store_path_str, None)
             }
@@ -130,11 +166,9 @@ impl GCRoot {
             Some(age) => print!("age: {}, ", age.bright_blue()),
             None => print!("age: {}, ", "n/a".bright_blue()),
         }
-        if print_size {
-            match size {
-                Some(size) => print!("closure size: {}, ", size.to_string().yellow()),
-                None => print!("closure size: {}, ", "n/a".to_string().yellow()),
-            }
+        match size {
+            Some(size) => print!("closure size: {}, ", size.to_string().yellow()),
+            None => print!("closure size: {}, ", "n/a".to_string().yellow()),
         }
         println!("type: {}", attributes.blue());
     }
