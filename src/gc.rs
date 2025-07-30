@@ -14,6 +14,6 @@ pub fn gc() -> Result<(), String> {
         } else {
             Err("Garbage collection failed".to_string())
         },
-        Err(e) => Err(format!("Garbage collection failed ({})", e)),
+        Err(e) => Err(format!("Garbage collection failed: {}", e)),
     }
 }

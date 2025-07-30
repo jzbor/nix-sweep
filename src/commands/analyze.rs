@@ -170,10 +170,7 @@ impl super::Command for AnalyzeCommand {
         let size_str = FmtSize::new(total_size).to_string();
         let percentage_str = FmtPercentage::new(total_size, store_size).bracketed()
             .right_pad();
-        println!("{}\t{} {}",
-            "Total closure size of independent GC Roots:",
-            size_str.yellow(),
-            percentage_str);
+        println!("Total closure size of independent GC Roots:\t{} {}", size_str.yellow(), percentage_str);
 
         println!();
         Ok(())

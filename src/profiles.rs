@@ -46,14 +46,14 @@ impl Profile {
     pub fn new(parent: PathBuf, name: String) -> Result<Self, String> {
         let full_path = parent.clone().join(&name);
         if !fs::exists(&full_path)
-            .map_err(|e| format!("Unable to check path {} ({})", full_path.to_string_lossy(), e))? {
+            .map_err(|e| format!("Unable to check path {}: {}", full_path.to_string_lossy(), e))? {
             return Err(format!("Could not find profile '{}'", full_path.to_string_lossy()));
         }
 
         // discover generations
         let profile_prefix = format!("{}-", name);
         let mut generations: Vec<_> = fs::read_dir(&parent)
-            .map_err(|e| format!("Unable to read directory {} ({})", parent.to_string_lossy(), e))?
+            .map_err(|e| format!("Unable to read directory {}: {}", parent.to_string_lossy(), e))?
             .flatten()
             .filter(|e| e.file_name().to_str().map(|n| n.starts_with(&profile_prefix)).unwrap_or(false))
             .map(|e| Generation::new_from_direntry(&name, &e))
@@ -81,7 +81,7 @@ impl Profile {
 
     pub fn new_user_profile(name: String) -> Result<Self, String> {
         let check_path = |path: &str| fs::exists(format!("{}/{}", path, name))
-                .map_err(|e| format!("Unable to check path {} ({})", path, e));
+                .map_err(|e| format!("Unable to check path {}: {}", path, e));
         let user = env::var("USER")
             .map_err(|_| String::from("Unable to read $USER"))?;
 
@@ -220,17 +220,18 @@ impl Profile {
                 .map(|(i, gen)| {
                     let active = self.is_active_generation(gen);
                     let size = if print_size {
-                        match gen.store_path() {
-                            Ok(sp) => sp.closure_size(),
-                            Err(_) => 0,
-                        }
-                    } else { 0 };
+                        Some(
+                            gen.store_path()
+                                .map(|sp| sp.closure_size())
+                                .unwrap_or_default()
+                        )
+                    } else { None };
                     (i, active, size)
                 })
                 .for_each(|tup| ordered_channel.put(tup.0, tup));
         }, || {
                 for (i, active, size) in ordered_channel.iter(ngens) {
-                    gens[i].print_fancy(active, print_markers, Some(size));
+                    gens[i].print_fancy(active, print_markers, size);
                 }
         });
 
@@ -317,12 +318,12 @@ impl Generation {
             .map_err(|_| format!("Cannot parse \"{}\" as generation number", tokens[1]))?;
 
         let last_modified = fs::symlink_metadata(dirent.path())
-            .map_err(|e| format!("Unable to get metadata for path {} ({})", dirent.path().to_string_lossy(), e))?
+            .map_err(|e| format!("Unable to get metadata for path {}: {}", dirent.path().to_string_lossy(), e))?
             .modified()
-            .map_err(|e| format!("Unable to get metadata for path {} ({})", dirent.path().to_string_lossy(), e))?;
+            .map_err(|e| format!("Unable to get metadata for path {}: {}", dirent.path().to_string_lossy(), e))?;
         let now = SystemTime::now();
         let age = now.duration_since(last_modified)
-            .map_err(|e| format!("Unable to calculate generation age ({})", e))?;
+            .map_err(|e| format!("Unable to calculate generation age: {}", e))?;
 
         Ok(Generation {
             number, age,
@@ -385,7 +386,7 @@ impl Generation {
             } else {
                 Err(format!("Removal of generation {} failed", self.number()))
             },
-            Err(e) => Err(format!("Removal of generation {} failed ({})", self.number(), e)),
+            Err(e) => Err(format!("Removal of generation {} failed: {}", self.number(), e)),
         }
     }
 

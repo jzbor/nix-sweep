@@ -30,11 +30,11 @@ impl GCRoot {
         let store_path = StorePath::from_symlink(&link);
         let last_modified = fs::symlink_metadata(&link)
             .and_then(|m| m.modified())
-            .map_err(|e| format!("Unable to get metadata for path {} ({})", link.to_string_lossy(), e));
+            .map_err(|e| format!("Unable to get metadata for path {}: {}", link.to_string_lossy(), e));
         let now = SystemTime::now();
         let age = match last_modified {
             Ok(m) => now.duration_since(m)
-                .map_err(|e| format!("Unable to calculate generation age ({})", e)),
+                .map_err(|e| format!("Unable to calculate generation age: {}", e)),
             Err(e) => Err(e),
         };
 
@@ -125,19 +125,52 @@ impl GCRoot {
         Ok(dir_size_considering_hardlinks_all(&full_closure))
     }
 
-    pub fn print_concise(&self, closure_size: Option<u64>) {
-        let size_str = FmtOrNA::mapped(closure_size, FmtSize::new)
-            .left_pad();
-        let age_str = FmtOrNA::mapped(self.age().ok(), |s| FmtAge::new(s.clone()).with_suffix::<4>(" old".to_owned()))
+    pub fn filter_roots(mut roots: Vec<Self>, include_profiles: bool, include_current: bool, include_inaccessible: bool,
+                        older: Option<Duration>, newer: Option<Duration>) -> Vec<Self>{
+        if !include_profiles {
+            roots.retain(|r| !r.is_profile());
+        }
+        if !include_current {
+            roots.retain(|r| !r.is_current());
+        }
+        if !include_inaccessible {
+            roots.retain(|r| r.is_accessible());
+        }
+
+        if let Some(older) = older {
+            roots.retain(|r| match r.age() {
+                Ok(age) => age > &older,
+                Err(_) => true,
+            })
+        }
+        if let Some(newer) = newer {
+            roots.retain(|r| match r.age() {
+                Ok(age) => age <= &newer,
+                Err(_) => true,
+            })
+        }
+
+        roots
+    }
+
+    pub fn print_concise(&self, closure_size: Option<u64>, show_size: bool) {
+        let size_str = if show_size {
+            FmtOrNA::mapped(closure_size, FmtSize::new)
+                .left_pad()
+        } else {
+            String::new()
+        };
+        let age_str = FmtOrNA::mapped(self.age().ok(), |s| FmtAge::new(*s).with_suffix::<4>(" old".to_owned()))
             .or_empty()
             .right_pad();
+
         println!("{:<48}\t{}\t{}",
             self.link().to_string_lossy(),
             size_str.yellow(),
             age_str.bright_blue());
     }
 
-    pub fn print_fancy(&self, closure_size: Option<u64>) {
+    pub fn print_fancy(&self, closure_size: Option<u64>, show_size: bool) {
         let attributes = match (self.is_profile(), self.is_current()) {
             (true, true) => "(profile, current)",
             (true, false) => "(profile)",
@@ -167,9 +200,11 @@ impl GCRoot {
             Some(age) => print!("age: {}, ", age.bright_blue()),
             None => print!("age: {}, ", "n/a".bright_blue()),
         }
-        match size {
-            Some(size) => print!("closure size: {}, ", size.to_string().yellow()),
-            None => print!("closure size: {}, ", "n/a".to_string().yellow()),
+        if show_size {
+            match size {
+                Some(size) => print!("closure size: {}, ", size.to_string().yellow()),
+                None => print!("closure size: {}, ", "n/a".to_string().yellow()),
+            }
         }
         println!("type: {}", attributes.blue());
     }
