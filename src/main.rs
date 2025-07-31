@@ -96,12 +96,16 @@ fn parse_args() -> Result<Args, String> {
     match Args::try_parse() {
         Ok(args) => Ok(args),
         Err(e) => {
-            let msg = e.render().to_string().chars()
-                .skip(7)
-                .enumerate()
-                .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
-                .collect();
-            Err(msg)
+            if e.render().to_string().starts_with("error: ") {
+                let msg = e.render().to_string().chars()
+                    .skip(7)
+                    .enumerate()
+                    .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
+                    .collect();
+                Err(msg)
+            } else {
+                e.exit()
+            }
         },
     }
 }

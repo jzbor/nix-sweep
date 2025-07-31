@@ -1,5 +1,3 @@
-use colored::Colorize;
-
 use crate::files;
 use crate::fmt::{FmtPercentage, FmtSize};
 use crate::interaction::{announce, ask};
