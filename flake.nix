@@ -90,7 +90,19 @@
       gc = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Run nix garbage collection afterwards.";
+        description = "Run Nix garbage collection afterwards.";
+      };
+
+      gcBigger = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+        description = "Only perform gc if store is bigger than this many GiB";
+      };
+
+      gcQuota = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+        description = "Only perform gc if store uses more than this many % of its device";
       };
 
       gcInterval = lib.mkOption {
@@ -106,6 +118,8 @@
         "cleanout"
         "--non-interactive"
       ] ++ (if cfg.gc && cfg.gcInterval == cfg.interval then [ "--gc" ] else [])
+        ++ (if cfg.gcBigger == null then [] else [ "--gc-bigger" (toString cfg.gcBigger) ])
+        ++ (if cfg.gcQuota == null then [] else [ "--gc-quota" (toString cfg.gcQuota) ])
         ++ (if cfg.keepMin == null then [] else [ "--keep-min" (toString cfg.keepMin) ])
         ++ (if cfg.keepMax == null then [] else [ "--keep-max" (toString cfg.keepMax) ])
         ++ (if cfg.keepNewer == null then [] else [ "--keep-newer" cfg.keepNewer ])
@@ -113,7 +127,13 @@
         ++ cfg.profiles
       );
 
-      "nix-sweep-gc" = "${cfg.package}/bin/nix-sweep gc --non-interactive";
+      "nix-sweep-gc" = lib.strings.concatStringsSep " " ([
+        "${cfg.package}/bin/nix-sweep"
+        "gc"
+        "--non-interactive"
+      ] ++ (if cfg.gcBigger == null then [] else [ "--bigger" (toString cfg.gcBigger) ])
+        ++ (if cfg.gcQuota == null then [] else [ "--quota" (toString cfg.gcQuota) ])
+      );
     };
   in {
     ### NixOS ###
