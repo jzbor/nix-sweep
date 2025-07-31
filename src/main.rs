@@ -1,4 +1,5 @@
 use std::cmp;
+use std::error::Error;
 use std::{env, thread};
 
 use clap::Parser;
@@ -92,8 +93,22 @@ fn init_rayon() -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+fn parse_args() -> Result<Args, String> {
+    match Args::try_parse() {
+        Ok(args) => Ok(args),
+        Err(e) => {
+            let msg = e.render().to_string().chars()
+                .skip(7)
+                .enumerate()
+                .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
+                .collect();
+            Err(msg)
+        },
+    }
+}
+
 fn main() {
-    let config = Args::parse();
+    let config = resolve(parse_args());
     resolve(init_rayon());
 
     use Subcommand::*;
