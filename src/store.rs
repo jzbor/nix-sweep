@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use rayon::slice::ParallelSliceMut;
 
 use crate::caching::Cache;
-use crate::{files::*, HashSet};
+use crate::{files::{self, *}, HashSet};
 
 
 pub const NIX_STORE: &str = "/nix/store";
@@ -64,6 +64,10 @@ impl Store {
         let store_path = std::path::PathBuf::from(NIX_STORE);
         let size = dir_size_considering_hardlinks(&store_path);
         Ok(size)
+    }
+
+    pub fn blkdev() -> Result<String, String> {
+        files::blkdev_of_path(Path::new(NIX_STORE))
     }
 
     pub fn gc() -> Result<(), String> {

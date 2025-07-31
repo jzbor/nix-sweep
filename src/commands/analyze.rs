@@ -93,7 +93,7 @@ impl super::Command for AnalyzeCommand {
         println!("{}", "=> System:".green());
 
         print!("{:<20} {}", format!("{}:", NIX_STORE), FmtSize::new(store_size).left_pad().yellow());
-        let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(NIX_STORE))
+        let blkdev_info = Store::blkdev()
             .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)));
         if let Ok((dev, size)) = blkdev_info {
             let percent_str = FmtPercentage::new(store_size, size).left_pad();
@@ -105,7 +105,7 @@ impl super::Command for AnalyzeCommand {
         if let Some(journal_size) = journal_size {
             print!("{:<20} {:>11}", format!("{}:", JOURNAL_PATH), FmtSize::new(journal_size).left_pad().yellow());
 
-            let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(NIX_STORE))
+            let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(JOURNAL_PATH))
                 .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)));
             if let Ok((dev, size)) = blkdev_info {
                 let percent_str = FmtPercentage::new(journal_size, size).left_pad();
