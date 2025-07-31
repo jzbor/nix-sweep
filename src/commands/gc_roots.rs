@@ -83,8 +83,14 @@ impl super::Command for GCRootsCommand {
                     println!("{}", root.link().to_string_lossy());
                 } else if self.tsv {
                     let path = root.store_path().as_ref().map(|p| p.path().to_string_lossy().to_string())
-                        .unwrap_or(String::from("n/a"));
-                    println!("{}\t{}", root.link().to_string_lossy(), path);
+                        .unwrap_or_default();
+                    if self.no_size {
+                        println!("{}\t{}", root.link().to_string_lossy(), path);
+                    } else {
+                        let size = closure_size.as_ref().map(|s| s.to_string())
+                            .unwrap_or(String::from("n/a"));
+                        println!("{}\t{}\t{}", root.link().to_string_lossy(), path, size);
+                    }
                 } else if self.long {
                     root.print_fancy(closure_size, !self.no_size);
                 } else {
