@@ -39,12 +39,12 @@ impl super::Command for GenerationsCommand {
                         .map(|sp| sp.path().to_string_lossy().to_string())
                         .unwrap_or_default();
                     if self.no_size {
-                        println!("{}\t{}\t{}", num, path, store_path);
+                        println!("{num}\t{path}\t{store_path}");
                     } else  {
                         let size = gen.store_path()
                             .map(|sp| sp.closure_size().to_string())
                             .unwrap_or_default();
-                        println!("{}\t{}\t{}\t{}", num, path, store_path, size);
+                        println!("{num}\t{path}\t{store_path}\t{size}");
 
                     }
                 }

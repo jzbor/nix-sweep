@@ -153,7 +153,7 @@ impl super::Command for AnalyzeCommand {
             );
         }
         if drained_profiles != 0 {
-            println!("...and {} more", drained_profiles);
+            println!("...and {drained_profiles} more");
         }
 
 
@@ -182,7 +182,7 @@ impl super::Command for AnalyzeCommand {
             );
         }
         if drained_gc_roots != 0 {
-            println!("...and {} more", drained_gc_roots);
+            println!("...and {drained_gc_roots} more");
         }
 
         println!();

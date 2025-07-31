@@ -79,7 +79,7 @@ enum Subcommand {
 fn init_rayon() -> Result<(), String> {
     let nthreads: usize = match env::var(THREADS_ENV_VAR).ok() {
         Some(n) => n.parse()
-            .map_err(|_| format!("Unable to parse {} environment variable", THREADS_ENV_VAR))?,
+            .map_err(|_| format!("Unable to parse {THREADS_ENV_VAR} environment variable"))?,
         None => match thread::available_parallelism().ok() {
             Some(avail) => cmp::min(avail.into(), MAX_THREADS),
             None => MAX_THREADS,

@@ -21,8 +21,8 @@ pub fn warn(warning: &str) {
 pub fn ask(question: &str, default: bool) -> bool {
     loop {
         match default {
-            true => print!("{} [Y/n] ",question),
-            false => print!("{} [y/N] ",question),
+            true => print!("{question} [Y/n] "),
+            false => print!("{question} [y/N] "),
         }
         let _ = std::io::stdout().flush();
 
@@ -43,7 +43,7 @@ pub fn ask(question: &str, default: bool) -> bool {
 
 pub fn ack(question: &str) {
     loop {
-        print!("{} [enter] ",question);
+        print!("{question} [enter] ");
         let _ = std::io::stdout().flush();
 
         let mut input = String::new();
@@ -56,5 +56,5 @@ pub fn ack(question: &str) {
 }
 
 pub fn announce(s: String) {
-    println!("\n{}", format!("=> {}", s).green());
+    println!("\n{}", format!("=> {s}").green());
 }

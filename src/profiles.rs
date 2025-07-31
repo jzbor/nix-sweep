@@ -51,7 +51,7 @@ impl Profile {
         }
 
         // discover generations
-        let profile_prefix = format!("{}-", name);
+        let profile_prefix = format!("{name}-");
         let mut generations: Vec<_> = fs::read_dir(&parent)
             .map_err(|e| format!("Unable to read directory {}: {}", parent.to_string_lossy(), e))?
             .flatten()
@@ -80,12 +80,12 @@ impl Profile {
     }
 
     pub fn new_user_profile(name: String) -> Result<Self, String> {
-        let check_path = |path: &str| fs::exists(format!("{}/{}", path, name))
-                .map_err(|e| format!("Unable to check path {}: {}", path, e));
+        let check_path = |path: &str| fs::exists(format!("{path}/{name}"))
+                .map_err(|e| format!("Unable to check path {path}: {e}"));
         let user = env::var("USER")
             .map_err(|_| String::from("Unable to read $USER"))?;
 
-        let path = format!("/nix/var/nix/profiles/per-user/{}", user);
+        let path = format!("/nix/var/nix/profiles/per-user/{user}");
         if check_path(&path)? {
             return Self::new(PathBuf::from(path), name);
         }
@@ -93,7 +93,7 @@ impl Profile {
         let home = env::var("HOME")
             .map_err(|_| String::from("Unable to read $USER"))?;
 
-        let path = format!("{}/.local/state/nix/profiles", home);
+        let path = format!("{home}/.local/state/nix/profiles");
         if check_path(&path)? {
             return Self::new(PathBuf::from(path), name);
         }
@@ -308,7 +308,7 @@ impl Generation {
             .ok_or("Cannot create generation representation (missing profile prefix)")?;
         let tokens: Vec<_> = suffix.split('-').collect();
         if tokens.len() != 3 || tokens[2] != "link" {
-            return Err(format!("Cannot create generation representation ({:?})", tokens))
+            return Err(format!("Cannot create generation representation ({tokens:?})"))
         }
 
         let profile_path = dirent.path().parent().unwrap()
@@ -323,7 +323,7 @@ impl Generation {
             .map_err(|e| format!("Unable to get metadata for path {}: {}", dirent.path().to_string_lossy(), e))?;
         let now = SystemTime::now();
         let age = now.duration_since(last_modified)
-            .map_err(|e| format!("Unable to calculate generation age: {}", e))?;
+            .map_err(|e| format!("Unable to calculate generation age: {e}"))?;
 
         Ok(Generation {
             number, age,
@@ -400,7 +400,7 @@ impl Generation {
                 .left_pad());
 
         if print_marker {
-            print!(", {}", marker);
+            print!(", {marker}");
         }
 
         if let Some(size) = size {

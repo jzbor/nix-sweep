@@ -84,7 +84,7 @@ impl Store {
             } else {
                 Err("Garbage collection failed".to_string())
             },
-            Err(e) => Err(format!("Garbage collection failed: {}", e)),
+            Err(e) => Err(format!("Garbage collection failed: {e}")),
         }
     }
 }
@@ -132,7 +132,7 @@ impl StorePath {
 
         if !output.status.success() {
             match output.status.code() {
-                Some(code) => return Err(format!("`nix-store` failed (exit code {})", code)),
+                Some(code) => return Err(format!("`nix-store` failed (exit code {code})")),
                 None => return Err("`nix-store` failed".to_string()),
             }
         }

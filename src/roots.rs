@@ -34,7 +34,7 @@ impl GCRoot {
         let now = SystemTime::now();
         let age = match last_modified {
             Ok(m) => now.duration_since(m)
-                .map_err(|e| format!("Unable to calculate generation age: {}", e)),
+                .map_err(|e| format!("Unable to calculate generation age: {e}")),
             Err(e) => Err(e),
         };
 
@@ -198,7 +198,7 @@ impl GCRoot {
         };
 
         println!("\n{}", self.link().to_string_lossy());
-        println!("{}", format!("  -> {}", store_path).bright_black());
+        println!("{}", format!("  -> {store_path}").bright_black());
         print!("  ");
         match age_str {
             Some(age) => print!("age: {}, ", age.bright_blue()),

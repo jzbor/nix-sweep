@@ -64,10 +64,10 @@ impl super::Command for GCCommand {
 
                 let blkdev_size = files::get_blkdev_size(&Store::blkdev()?)?;
                 let percentage = size * 100 / blkdev_size;
-                if percentage < quota as u64 {
+                if percentage < quota {
                     let msg = format!("Nothing to do: Device usage of store is at {} (below the threshold of {})",
                         FmtPercentage::new(size, blkdev_size),
-                        FmtPercentage::new(quota as u64, 100));
+                        FmtPercentage::new(quota, 100));
                     announce(msg);
                     return Ok(());
                 }

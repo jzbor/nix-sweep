@@ -76,11 +76,11 @@ pub fn find_blkdev(id: u64) -> Result<String, String> {
         .filter(|(_, m)| m.file_type().is_block_device())
         .find(|(_, m)| m.rdev() == id)
         .map(|(n, _)| n)
-        .ok_or(format!("Could not find device for id {}", id))
+        .ok_or(format!("Could not find device for id {id}"))
 }
 
 pub fn get_blkdev_size(name: &str) -> Result<u64, String> {
-    let size_file_path = PathBuf::from(&format!("/sys/class/block/{}/size", name));
+    let size_file_path = PathBuf::from(&format!("/sys/class/block/{name}/size"));
     fs::read_to_string(size_file_path)
         .map_err(|e| e.to_string())?
         .lines()

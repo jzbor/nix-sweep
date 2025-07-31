@@ -133,7 +133,7 @@ impl ConfigPreset {
                 && user_named_preset.is_none()
                 && custom_named_preset.is_none()
                 && preset_name != DEFAULT_PRESET {
-            return Err(format!("Could not find preset '{}'", preset_name));
+            return Err(format!("Could not find preset '{preset_name}'"));
         }
 
         let preset = Self::default()
@@ -209,7 +209,7 @@ impl ConfigPreset {
             } else if other.keep_max.is_none() {
                 keep_max = keep_min;
             } else {
-                panic!("Inconsistent config after load (keep_min: {:?}, keep_max: {:?})", keep_min, keep_max);
+                panic!("Inconsistent config after load (keep_min: {keep_min:?}, keep_max: {keep_max:?})");
             }
         }
 
@@ -219,7 +219,7 @@ impl ConfigPreset {
             } else if other.keep_max.is_none() {
                 remove_older = keep_newer;
             } else {
-                panic!("Inconsistent config after load (keep_newer: {:?}, remove_older: {:?})", keep_newer, remove_older);
+                panic!("Inconsistent config after load (keep_newer: {keep_newer:?}, remove_older: {remove_older:?})");
             }
         }
 

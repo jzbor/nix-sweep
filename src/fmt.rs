@@ -176,7 +176,7 @@ impl<T: Formattable> Display for FmtBracketed<T> {
 impl<T: Formattable> Display for FmtOrNA<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
-            Some(val) => write!(f, "{}", val),
+            Some(val) => write!(f, "{val}"),
             None => write!(f, "{}", if self.1 { "n/a" } else { "" }),
         }
     }
@@ -192,31 +192,31 @@ impl Display for FmtAge {
         let years = days / 365;
 
         if minutes < 1 {
-            write!(f, "{} sec", seconds)
+            write!(f, "{seconds} sec")
         } else if hours < 1 {
-            write!(f, "{} min", minutes)
+            write!(f, "{minutes} min")
         } else if days < 1 {
             if hours == 1 {
                 write!(f, "1 hour")
             } else {
-                write!(f, "{} hours", hours)
+                write!(f, "{hours} hours")
             }
         } else if years < 1 {
             if days == 1 {
                 write!(f, "1 day")
             } else {
-                write!(f, "{} days", days)
+                write!(f, "{days} days")
             }
         } else if years < 3 {
             if weeks == 1 {
                 write!(f, "1 week")
             } else {
-                write!(f, "{} weeks", weeks)
+                write!(f, "{weeks} weeks")
             }
         } else if years == 1 {
             write!(f, "1 year")
         } else {
-            write!(f, "{} years", years)
+            write!(f, "{years} years")
         }
 
     }
@@ -243,6 +243,6 @@ impl Display for FmtWithEllipsis {
             s.to_owned()
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
