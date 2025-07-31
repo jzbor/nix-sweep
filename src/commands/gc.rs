@@ -1,18 +1,26 @@
 use colored::Colorize;
 
-use crate::gc;
-use crate::interaction::ask;
+use crate::fmt::FmtSize;
+use crate::interaction::{announce, ask};
+use crate::store::Store;
+
+
+const GIB: u64 = 1024 * 1024 * 1024;
 
 
 #[derive(clap::Args)]
 pub struct GCCommand {
-    /// Ask before running garbage collection
+    /// Do not ask before running garbage collection
     #[clap(short('n'), long("non-interactive"), action = clap::ArgAction::SetFalse)]  // this is very confusing, but works
     interactive: bool,
 
-    /// Do not ask before running garbage collection
+    /// Ask before running garbage collection
     #[clap(short('i'), long("interactive"), overrides_with = "interactive")]
     _non_interactive: bool,
+
+    /// Only perform garbage collection, if the store is bigger than BIGGER Gibibytes.
+    #[clap(short, long)]
+    bigger: Option<u64>,
 
     /// Don't actually run garbage collection
     #[clap(short, long)]
@@ -21,18 +29,32 @@ pub struct GCCommand {
 
 impl GCCommand {
     pub fn new(interactive: bool, dry_run: bool) -> Self {
-        GCCommand { interactive, dry_run, _non_interactive: !interactive }
+        GCCommand { interactive, dry_run, _non_interactive: !interactive, bigger: None}
     }
 }
 
 impl super::Command for GCCommand {
     fn run(self) -> Result<(), String> {
+        if let Some(bigger) = self.bigger {
+            eprintln!("Calculating store size...");
+            let size = Store::size()?;
+            eprintln!("Store has a size of {}", FmtSize::new(size));
+            if size < bigger * GIB {
+                let msg = format!("Nothing to do: Store size is at {} ({} below the threshold of {})",
+                    FmtSize::new(size),
+                    FmtSize::new(bigger * GIB - size),
+                    FmtSize::new(bigger * GIB));
+                announce(msg);
+                return Ok(());
+            }
+        }
+
         if self.dry_run {
-            println!("\n{}", "=> Skipping garbage collection (dry run)".green());
+            announce("=> Skipping garbage collection (dry run)".green().to_string());
         } else {
-            println!("\n{}", "=> Running garbage collection".green());
+            announce("=> Running garbage collection".green().to_string());
             if !self.interactive || ask("Do you want to perform garbage collection now?", false) {
-                gc::gc()?
+                Store::gc()?
             }
         }
 

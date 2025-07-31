@@ -77,7 +77,7 @@ impl super::Command for CleanoutCommand {
 }
 
 fn remove_generations(profile: &Profile) {
-    announce_removal(profile);
+    announce(format!("Removing old generations for profile {}", profile.path().to_string_lossy()));
     for gen in profile.generations() {
         let age_str = FmtAge::new(gen.age()).to_string();
         if gen.marked() {

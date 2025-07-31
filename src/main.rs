@@ -8,7 +8,6 @@ use crate::commands::Command;
 use crate::interaction::resolve;
 
 mod config;
-mod gc;
 mod profiles;
 mod store;
 mod roots;

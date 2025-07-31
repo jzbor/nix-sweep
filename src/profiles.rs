@@ -19,7 +19,7 @@ use crate::files::dir_size_considering_hardlinks_all;
 use crate::fmt::FmtAge;
 use crate::fmt::FmtSize;
 use crate::fmt::Formattable;
-use crate::interaction::announce_listing;
+use crate::interaction::announce;
 use crate::ordered_channel::OrderedChannel;
 use crate::store::StorePath;
 use crate::HashSet;
@@ -204,7 +204,7 @@ impl Profile {
 
 
     pub fn list_generations(&self, print_size: bool, print_markers: bool) {
-        announce_listing(self);
+        announce(format!("Listing generations for profile {}", self.path().to_string_lossy()));
 
         let store_paths: Vec<_> = self.generations().iter()
             .flat_map(|g| g.store_path())

@@ -6,7 +6,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIter
 use rayon::slice::ParallelSliceMut;
 
 use crate::fmt::*;
-use crate::interaction::announce_gc_roots;
+use crate::interaction::announce;
 use crate::ordered_channel::OrderedChannel;
 use crate::roots::GCRoot;
 use crate::roots;
@@ -65,7 +65,7 @@ impl super::Command for GCRootsCommand {
         let nroots_listed = roots.len();
 
         if !self.tsv && !self.paths {
-            announce_gc_roots(nroots_total, nroots_listed);
+            announce(format!("Listing {} gc roots (out of {} total)", nroots_listed, nroots_total));
         }
 
         let max_link_len = roots.iter()
