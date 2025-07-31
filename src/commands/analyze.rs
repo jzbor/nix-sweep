@@ -121,7 +121,14 @@ impl super::Command for AnalyzeCommand {
 
         println!();
         println!("{}", "=> Profiles:".green());
+        let max_path_len = sorted_profiles.iter()
+            .map(|(p, _, _)| p.to_string_lossy().len())
+            .max()
+            .unwrap_or(0);
         for (path, profile, size) in sorted_profiles {
+            let path = path.to_string_lossy().to_string();
+            let path_str = FmtWithEllipsis::fitting_terminal(path, max_path_len, 40)
+                .right_pad();
             let size_str = FmtOrNA::mapped(size, FmtSize::new)
                 .left_pad();
             let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
@@ -132,8 +139,8 @@ impl super::Command for AnalyzeCommand {
                 None => "n/a".to_owned(),
             };
 
-            println!("{:<48}\t{} {}    {}",
-                path.to_string_lossy(),
+            println!("{}  {} {}    {}",
+                path_str,
                 size_str.yellow(),
                 percentage_str,
                 generations_str.bright_blue(),
@@ -147,16 +154,25 @@ impl super::Command for AnalyzeCommand {
         println!();
         println!("{}", "=> GC Roots:".green());
 
+        let max_link_len = sorted_gc_roots.iter()
+            .map(|(r, _)| r.link().to_string_lossy().len())
+            .max()
+            .unwrap_or(0);
         for (root, size) in &sorted_gc_roots {
+            let link = root.link().to_string_lossy().to_string();
+            let link_str = FmtWithEllipsis::fitting_terminal(link, max_link_len, 20)
+                .right_pad();
             let size_str = FmtOrNA::mapped(*size, FmtSize::new)
                 .left_pad();
             let percentage_str = FmtOrNA::mapped(*size, |s| FmtPercentage::new(s, store_size).bracketed())
                 .or_empty()
                 .right_pad();
-            println!("{:<48}\t{} {}",
-                root.link().to_string_lossy(),
+
+            println!("{}  {} {}",
+                link_str,
                 size_str.yellow(),
-                percentage_str);
+                percentage_str,
+            );
         }
         if drained_gc_roots != 0 {
             println!("...and {} more", drained_gc_roots);

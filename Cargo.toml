@@ -15,6 +15,7 @@ rayon = "1.10.0"
 rustc-hash = "2.1.1"
 serde = { version = "1.0.219", features = ["derive"] }
 size = "0.5.0"
+terminal_size = "0.4.2"
 toml = "0.8.21"
 xdg = "3.0.0"
 

@@ -1,6 +1,8 @@
+use std::cmp;
 use std::{fmt::Display, time::Duration};
 
 use size::Size;
+use terminal_size::terminal_size;
 
 
 pub trait Formattable: Display {
@@ -34,6 +36,7 @@ pub struct FmtPercentage(u64);
 pub struct FmtBracketed<T: Formattable>(Box<T>, [char; 2]);
 pub struct FmtOrNA<T: Formattable>(Option<T>, bool);
 pub struct FmtAge(Duration);
+pub struct FmtWithEllipsis(String, usize);
 pub struct FmtPrefix<const ADD: usize, T: Formattable>(Box<T>, String);
 pub struct FmtSuffix<const ADD: usize, T: Formattable>(Box<T>, String);
 
@@ -47,6 +50,24 @@ impl FmtSize {
 impl FmtPercentage {
     pub fn new(amount: u64, total: u64) -> Self {
         FmtPercentage(amount * 100 / total)
+    }
+}
+
+impl FmtWithEllipsis {
+    pub fn fitting_terminal(s: String, preferred_width: usize, leave_space: usize) -> Self {
+        let actual_width = match terminal_size() {
+            Some((tw, _)) => cmp::min((tw.0 as usize).saturating_sub(leave_space), preferred_width),
+            None => preferred_width,
+        };
+        FmtWithEllipsis(s, actual_width)
+    }
+
+    pub fn left_pad(&self) -> String {
+        format!("{:>width$}", self.to_string(), width = self.1)
+    }
+
+    pub fn right_pad(&self) -> String {
+        format!("{:<width$}", self.to_string(), width = self.1)
     }
 }
 
@@ -209,5 +230,18 @@ impl<const ADD: usize, T: Formattable> Display for FmtPrefix<ADD, T> {
 impl<const ADD: usize, T: Formattable> Display for FmtSuffix<ADD, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.0, self.1)
+    }
+}
+
+impl Display for FmtWithEllipsis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let FmtWithEllipsis(s, width) = self;
+        let s = if s.len() > *width {
+            format!("{}...", &s[..width.saturating_sub(3)])
+        } else {
+            s.to_owned()
+        };
+
+        write!(f, "{}", s)
     }
 }
