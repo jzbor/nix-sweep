@@ -18,9 +18,13 @@ pub struct AnalyzeCommand {
     #[clap(long)]
     no_journal: bool,
 
-    /// Show all gc-roots and profiles
+    /// Show all gc roots and profiles
     #[clap(short, long)]
     all: bool,
+
+    /// Show the full path for gc roots and profiles
+    #[clap(short, long)]
+    full_paths: bool,
 
     /// Show n gc-roots and profiles
     #[clap(long, default_value_t = 5)]
@@ -128,10 +132,12 @@ impl super::Command for AnalyzeCommand {
         for (path, profile, size) in sorted_profiles {
             let path = path.to_string_lossy().to_string();
             let path_str = FmtWithEllipsis::fitting_terminal(path, max_path_len, 40)
+                .truncate(!self.full_paths)
                 .right_pad();
             let size_str = FmtOrNA::mapped(size, FmtSize::new)
                 .left_pad();
-            let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size).bracketed())
+            let percentage_str = FmtOrNA::mapped(size, |s| FmtPercentage::new(s, store_size)
+                .bracketed())
                 .or_empty()
                 .right_pad();
             let generations_str = match profile {
@@ -161,6 +167,7 @@ impl super::Command for AnalyzeCommand {
         for (root, size) in &sorted_gc_roots {
             let link = root.link().to_string_lossy().to_string();
             let link_str = FmtWithEllipsis::fitting_terminal(link, max_link_len, 20)
+                .truncate(!self.full_paths)
                 .right_pad();
             let size_str = FmtOrNA::mapped(*size, FmtSize::new)
                 .left_pad();
@@ -184,7 +191,8 @@ impl super::Command for AnalyzeCommand {
             .collect();
         let total_size = GCRoot::full_closure_size(&roots)?;
         let size_str = FmtSize::new(total_size).to_string();
-        let percentage_str = FmtPercentage::new(total_size, store_size).bracketed()
+        let percentage_str = FmtPercentage::new(total_size, store_size)
+            .bracketed()
             .right_pad();
         println!("Total closure size of independent GC Roots:\t{} {}", size_str.yellow(), percentage_str);
 

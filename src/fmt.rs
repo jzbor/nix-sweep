@@ -36,7 +36,7 @@ pub struct FmtPercentage(u64);
 pub struct FmtBracketed<T: Formattable>(Box<T>, [char; 2]);
 pub struct FmtOrNA<T: Formattable>(Option<T>, bool);
 pub struct FmtAge(Duration);
-pub struct FmtWithEllipsis(String, usize);
+pub struct FmtWithEllipsis(String, usize, bool);
 pub struct FmtPrefix<const ADD: usize, T: Formattable>(Box<T>, String);
 pub struct FmtSuffix<const ADD: usize, T: Formattable>(Box<T>, String);
 
@@ -59,11 +59,12 @@ impl FmtWithEllipsis {
             Some((tw, _)) => cmp::min((tw.0 as usize).saturating_sub(leave_space), preferred_width),
             None => preferred_width,
         };
-        FmtWithEllipsis(s, actual_width)
+        FmtWithEllipsis(s, actual_width, true)
     }
 
-    pub fn left_pad(&self) -> String {
-        format!("{:>width$}", self.to_string(), width = self.1)
+    pub fn truncate(mut self, trunc: bool) -> Self {
+        self.2 = trunc;
+        self
     }
 
     pub fn right_pad(&self) -> String {
@@ -235,8 +236,8 @@ impl<const ADD: usize, T: Formattable> Display for FmtSuffix<ADD, T> {
 
 impl Display for FmtWithEllipsis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let FmtWithEllipsis(s, width) = self;
-        let s = if s.len() > *width {
+        let FmtWithEllipsis(s, width, trunc) = self;
+        let s = if *trunc && s.len() > *width {
             format!("{}...", &s[..width.saturating_sub(3)])
         } else {
             s.to_owned()
