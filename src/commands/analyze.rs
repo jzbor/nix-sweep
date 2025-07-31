@@ -6,6 +6,7 @@ use rayon::slice::ParallelSliceMut;
 
 use crate::files;
 use crate::fmt::*;
+use crate::interaction::announce;
 use crate::journal::*;
 use crate::profiles::Profile;
 use crate::roots::GCRoot;
@@ -89,8 +90,7 @@ impl super::Command for AnalyzeCommand {
         };
 
 
-        eprintln!();
-        println!("{}", "=> System:".green());
+        announce("System:".to_owned());
 
         print!("{:<20} {}", format!("{}:", NIX_STORE), FmtSize::new(store_size).left_pad().yellow());
         let blkdev_info = Store::blkdev()
@@ -123,8 +123,7 @@ impl super::Command for AnalyzeCommand {
         }
 
 
-        println!();
-        println!("{}", "=> Profiles:".green());
+        announce("Profiles:".to_owned());
         let max_path_len = sorted_profiles.iter()
             .map(|(p, _, _)| p.to_string_lossy().len())
             .max()
@@ -157,8 +156,7 @@ impl super::Command for AnalyzeCommand {
         }
 
 
-        println!();
-        println!("{}", "=> GC Roots:".green());
+        announce("GC Roots:".to_owned());
 
         let max_link_len = sorted_gc_roots.iter()
             .map(|(r, _)| r.link().to_string_lossy().len())

@@ -72,9 +72,9 @@ impl super::Command for GCCommand {
 
 
         if self.dry_run {
-            announce("Skipping garbage collection (dry run)".green().to_string());
+            announce("Skipping garbage collection (dry run)".to_owned());
         } else {
-            announce("Running garbage collection".green().to_string());
+            announce("Running garbage collection".to_owned());
             if !self.interactive || ask("Do you want to perform garbage collection now?", false) {
                 Store::gc()?
             }
