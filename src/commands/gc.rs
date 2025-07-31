@@ -44,7 +44,7 @@ impl super::Command for GCCommand {
             eprintln!("Calculating store size...");
             let size = Store::size()?;
             eprintln!("Store has a size of {}", FmtSize::new(size));
-            if size < bigger * GIB {
+            if size <= bigger * GIB {
                 let msg = format!("Nothing to do: Store size is at {} ({} below the threshold of {})",
                     FmtSize::new(size),
                     FmtSize::new(bigger * GIB - size),
@@ -61,7 +61,7 @@ impl super::Command for GCCommand {
 
             let blkdev_size = files::get_blkdev_size(&Store::blkdev()?)?;
             let percentage = size * 100 / blkdev_size;
-            if percentage < quota {
+            if percentage <= quota {
                 let msg = format!("Nothing to do: Device usage of store is at {} (below the threshold of {})",
                     FmtPercentage::new(size, blkdev_size),
                     FmtPercentage::new(quota, 100));
