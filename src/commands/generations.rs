@@ -28,20 +28,20 @@ impl super::Command for GenerationsCommand {
             let profile = Profile::from_str(&profile_str)?;
 
             if self.paths {
-                for gen in profile.generations() {
-                    println!("{}", gen.path().to_string_lossy());
+                for generation in profile.generations() {
+                    println!("{}", generation.path().to_string_lossy());
                 }
             } else if self.tsv {
-                for gen in profile.generations() {
-                    let num = gen.number();
-                    let path = gen.path().to_string_lossy();
-                    let store_path = gen.store_path()
+                for generation in profile.generations() {
+                    let num = generation.number();
+                    let path = generation.path().to_string_lossy();
+                    let store_path = generation.store_path()
                         .map(|sp| sp.path().to_string_lossy().to_string())
                         .unwrap_or_default();
                     if self.no_size {
                         println!("{num}\t{path}\t{store_path}");
                     } else  {
-                        let size = gen.store_path()
+                        let size = generation.store_path()
                             .map(|sp| sp.closure_size().to_string())
                             .unwrap_or_default();
                         println!("{num}\t{path}\t{store_path}\t{size}");

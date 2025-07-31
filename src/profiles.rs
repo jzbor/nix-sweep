@@ -154,10 +154,10 @@ impl Profile {
 
         // mark explicitly removed generations
         for num in &config.generations {
-            let gen = self.generations.iter_mut()
-                .find(|gen| gen.number() == *num);
-            if let Some(gen) = gen {
-                gen.mark();
+            let generation = self.generations.iter_mut()
+                .find(|g| g.number() == *num);
+            if let Some(generation) = generation {
+                generation.mark();
             }
         }
 
@@ -217,11 +217,11 @@ impl Profile {
         rayon::join( || {
             gens.par_iter()
                 .enumerate()
-                .map(|(i, gen)| {
-                    let active = self.is_active_generation(gen);
+                .map(|(i, g)| {
+                    let active = self.is_active_generation(g);
                     let size = if print_size {
                         Some(
-                            gen.store_path()
+                            g.store_path()
                                 .map(|sp| sp.closure_size())
                                 .unwrap_or_default()
                         )
@@ -272,7 +272,7 @@ impl Profile {
 
     pub fn is_active_generation(&self, generation: &Generation) -> bool {
         let active = match self.active_generation() {
-            Ok(gen) => gen,
+            Ok(g) => g,
             Err(_) => return false,
         };
         active == generation

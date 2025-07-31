@@ -78,13 +78,13 @@ impl super::Command for CleanoutCommand {
 
 fn remove_generations(profile: &Profile) {
     announce(format!("Removing old generations for profile {}", profile.path().to_string_lossy()));
-    for gen in profile.generations() {
-        let age_str = FmtAge::new(gen.age()).to_string();
-        if gen.marked() {
-            println!("{}", format!("-> Removing generation {} ({} old)", gen.number(), age_str).bright_blue());
-            resolve(gen.remove());
+    for generation in profile.generations() {
+        let age_str = FmtAge::new(generation.age()).to_string();
+        if generation.marked() {
+            println!("{}", format!("-> Removing generation {} ({} old)", generation.number(), age_str).bright_blue());
+            resolve(generation.remove());
         } else {
-            println!("{}", format!("-> Keeping generation {} ({} old)", gen.number(), age_str).bright_black());
+            println!("{}", format!("-> Keeping generation {} ({} old)", generation.number(), age_str).bright_black());
         }
     }
     println!();
