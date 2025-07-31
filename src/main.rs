@@ -1,5 +1,4 @@
 use std::cmp;
-use std::error::Error;
 use std::{env, thread};
 
 use clap::Parser;
