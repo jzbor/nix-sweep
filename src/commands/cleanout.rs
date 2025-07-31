@@ -68,7 +68,7 @@ impl super::Command for CleanoutCommand {
         }
 
         if config.gc == Some(true) {
-            let gc_cmd = GCCommand::new(interactive, self.dry_run);
+            let gc_cmd = GCCommand::new(interactive, self.dry_run, config.gc_bigger, config.gc_quota);
             gc_cmd.run()?;
         }
 

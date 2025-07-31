@@ -66,6 +66,14 @@ pub struct ConfigPreset {
     /// Run GC afterwards
     #[clap(long, action = clap::ArgAction::SetTrue)]
     pub gc: Option<bool>,
+
+    /// Only perform gc if the store is bigger than BIGGER Gibibytes.
+    #[clap(long)]
+    pub gc_bigger: Option<u64>,
+
+    /// Only perform gc if the store uses more than QUOTA% of its device.
+    #[clap(long, value_parser=clap::value_parser!(u64).range(0..100))]
+    pub gc_quota: Option<u64>,
 }
 
 impl ConfigFile {
@@ -196,11 +204,24 @@ impl ConfigPreset {
             (Some(val), None) => Some(val),
         };
 
-        let gc = match (self.interactive, other.gc) {
+        let gc = match (self.gc, other.gc) {
             (None, None) => None,
             (_, Some(val)) => Some(val),
             (Some(val), None) => Some(val),
         };
+
+        let gc_bigger = match (self.gc_bigger, other.gc_bigger) {
+            (None, None) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
+        let gc_quota = match (self.gc_quota, other.gc_quota) {
+            (None, None) => None,
+            (_, Some(val)) => Some(val),
+            (Some(val), None) => Some(val),
+        };
+
 
 
         if keep_min > keep_max && keep_min.is_some() && keep_max.is_some() {
@@ -225,7 +246,8 @@ impl ConfigPreset {
 
         ConfigPreset {
             keep_min, keep_max, keep_newer, remove_older,
-            interactive, gc, _non_interactive: None,
+            interactive, _non_interactive: None,
+            gc, gc_bigger, gc_quota,
             generations: other.generations.clone()
         }
     }
@@ -247,6 +269,8 @@ impl ConfigPreset {
             interactive: self.interactive,
             _non_interactive: None,
             gc: self.gc,
+            gc_bigger: if let Some(0) = self.gc_bigger { None } else { self.gc_bigger },
+            gc_quota: if let Some(0) = self.gc_quota { None } else { self.gc_quota },
             generations: self.generations.clone(),
         }
     }
@@ -262,6 +286,8 @@ impl Default for ConfigPreset {
             interactive: None,
             _non_interactive: None,
             gc: None,
+            gc_bigger: None,
+            gc_quota: None,
             generations: Vec::default(),
         }
     }

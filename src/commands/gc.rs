@@ -19,12 +19,12 @@ pub struct GCCommand {
     #[clap(short('i'), long("interactive"), overrides_with = "interactive")]
     _non_interactive: bool,
 
-    /// Only perform garbage collection, if the store is bigger than BIGGER Gibibytes.
+    /// Only perform gc if the store is bigger than BIGGER Gibibytes.
     #[clap(short, long)]
     bigger: Option<u64>,
 
-    /// Only perform garbage collection, if the store uses a bigger percentage of its disk than QUOTA%.
-    #[clap(short, long)]
+    /// Only perform gc if the store uses more than QUOTA% of its device.
+    #[clap(short, long, value_parser=clap::value_parser!(u64).range(1..100))]
     quota: Option<u64>,
 
     /// Don't actually run garbage collection
@@ -33,44 +33,40 @@ pub struct GCCommand {
 }
 
 impl GCCommand {
-    pub fn new(interactive: bool, dry_run: bool) -> Self {
-        GCCommand { interactive, dry_run, _non_interactive: !interactive, bigger: None, quota: None }
+    pub fn new(interactive: bool, dry_run: bool, bigger: Option<u64>, quota: Option<u64>) -> Self {
+        GCCommand { interactive, dry_run, bigger, quota, _non_interactive: !interactive}
     }
 }
 
 impl super::Command for GCCommand {
     fn run(self) -> Result<(), String> {
         if let Some(bigger) = self.bigger {
-            if bigger != 0 {
-                eprintln!("Calculating store size...");
-                let size = Store::size()?;
-                eprintln!("Store has a size of {}", FmtSize::new(size));
-                if size < bigger * GIB {
-                    let msg = format!("Nothing to do: Store size is at {} ({} below the threshold of {})",
-                        FmtSize::new(size),
-                        FmtSize::new(bigger * GIB - size),
-                        FmtSize::new(bigger * GIB));
-                    announce(msg);
-                    return Ok(());
-                }
+            eprintln!("Calculating store size...");
+            let size = Store::size()?;
+            eprintln!("Store has a size of {}", FmtSize::new(size));
+            if size < bigger * GIB {
+                let msg = format!("Nothing to do: Store size is at {} ({} below the threshold of {})",
+                    FmtSize::new(size),
+                    FmtSize::new(bigger * GIB - size),
+                    FmtSize::new(bigger * GIB));
+                announce(msg);
+                return Ok(());
             }
         }
 
         if let Some(quota) = self.quota {
-            if quota != 0 {
-                eprintln!("Calculating store size...");
-                let size = Store::size()?;
-                eprintln!("Store has a size of {}", FmtSize::new(size));
+            eprintln!("Calculating store size...");
+            let size = Store::size()?;
+            eprintln!("Store has a size of {}", FmtSize::new(size));
 
-                let blkdev_size = files::get_blkdev_size(&Store::blkdev()?)?;
-                let percentage = size * 100 / blkdev_size;
-                if percentage < quota {
-                    let msg = format!("Nothing to do: Device usage of store is at {} (below the threshold of {})",
-                        FmtPercentage::new(size, blkdev_size),
-                        FmtPercentage::new(quota, 100));
-                    announce(msg);
-                    return Ok(());
-                }
+            let blkdev_size = files::get_blkdev_size(&Store::blkdev()?)?;
+            let percentage = size * 100 / blkdev_size;
+            if percentage < quota {
+                let msg = format!("Nothing to do: Device usage of store is at {} (below the threshold of {})",
+                    FmtPercentage::new(size, blkdev_size),
+                    FmtPercentage::new(quota, 100));
+                announce(msg);
+                return Ok(());
             }
         }
 
