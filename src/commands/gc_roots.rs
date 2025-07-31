@@ -68,6 +68,11 @@ impl super::Command for GCRootsCommand {
             announce_gc_roots(nroots_total, nroots_listed);
         }
 
+        let max_link_len = roots.iter()
+            .map(|r| r.link().to_string_lossy().len())
+            .max()
+            .unwrap_or(0);
+
         let ordered_channel: OrderedChannel<_> = OrderedChannel::new();
         rayon::join( || {
             roots.par_iter()
@@ -94,7 +99,7 @@ impl super::Command for GCRootsCommand {
                 } else if self.long {
                     root.print_fancy(closure_size, !self.no_size);
                 } else {
-                    root.print_concise(closure_size, !self.no_size);
+                    root.print_concise(closure_size, !self.no_size, max_link_len);
                 }
             }
         });

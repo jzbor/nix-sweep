@@ -153,7 +153,7 @@ impl GCRoot {
         roots
     }
 
-    pub fn print_concise(&self, closure_size: Option<u64>, show_size: bool) {
+    pub fn print_concise(&self, closure_size: Option<u64>, show_size: bool, max_col_len: usize) {
         let size_str = if show_size {
             FmtOrNA::mapped(closure_size, FmtSize::new)
                 .left_pad()
@@ -164,8 +164,12 @@ impl GCRoot {
             .or_empty()
             .right_pad();
 
-        println!("{:<48}\t{}\t{}",
-            self.link().to_string_lossy(),
+        let link = self.link().to_string_lossy().to_string();
+        let link_str = FmtWithEllipsis::fitting_terminal(link, max_col_len, 32)
+            .right_pad();
+
+        println!("{}  {}    {}",
+            link_str,
             size_str.yellow(),
             age_str.bright_blue());
     }
