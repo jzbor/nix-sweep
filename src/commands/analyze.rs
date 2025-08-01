@@ -10,7 +10,7 @@ use crate::utils::interaction::announce;
 use crate::utils::journal::*;
 use crate::nix::profiles::Profile;
 use crate::nix::roots::GCRoot;
-use crate::nix::store::{Store, NIX_STORE};
+use crate::nix::store::{Store, StorePath, NIX_STORE};
 
 #[derive(clap::Args)]
 pub struct AnalyzeCommand {
@@ -42,6 +42,12 @@ impl super::Command for AnalyzeCommand {
         let store_size_naive = store_size_naive?;
         let store_size_hl = store_size_hl?;
         let store_size = cmp::min(store_size_naive, store_size_hl);
+        let alive_paths = Store::paths_alive()?;
+        let nalive_paths = alive_paths.len();
+        let alive_size = StorePath::size_all(&alive_paths.into_iter().collect::<Vec<_>>());
+        let dead_paths = Store::paths_dead()?;
+        let ndead_paths = dead_paths.len();
+        let dead_size = StorePath::size_all(&dead_paths.into_iter().collect::<Vec<_>>());
 
 
         let journal_size = if !self.no_journal && journal_exists() {
@@ -116,6 +122,8 @@ impl super::Command for AnalyzeCommand {
 
         println!();
         println!("Number of store paths:      \t{}", nstore_paths.to_string().bright_blue());
+        println!("Alive store paths:          \t{}\t({} store paths)", FmtSize::new(alive_size).left_pad(), nalive_paths);
+        println!("Dead store paths:           \t{}\t({} store paths)", FmtSize::new(dead_size).left_pad(), ndead_paths);
 
         if store_size_naive > store_size_hl {
             println!("Hardlinking currently saves:\t{}", size::Size::from_bytes(store_size_naive - store_size_hl).to_string().green());

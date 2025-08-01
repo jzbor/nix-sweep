@@ -2,6 +2,7 @@ use std::str::FromStr;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelExtend, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
 
 use crate::utils::caching::Cache;
@@ -20,16 +21,92 @@ pub struct Store();
 
 
 impl Store {
-    pub fn all_paths() -> Result<Vec<StorePath>, String> {
+    pub fn all_paths() -> Result<HashSet<StorePath>, String> {
         let read_dir = match fs::read_dir(NIX_STORE) {
             Ok(rd) => rd,
             Err(e) => return Err(e.to_string()),
         };
-        let mut paths: Vec<_> = read_dir.into_iter()
+        let paths: HashSet<_> = read_dir.into_iter()
             .flatten()
             .map(|e| e.path())
             .filter(|p| Self::is_valid_path(p))
             .flat_map(StorePath::new)
+            .collect();
+
+        Ok(paths)
+    }
+
+    pub fn paths_alive() -> Result<HashSet<StorePath>, String> {
+        let output = process::Command::new("nix-store")
+            .arg("--gc")
+            .arg("--print-roots")
+            .stdin(process::Stdio::inherit())
+            .stderr(process::Stdio::inherit())
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            match output.status.code() {
+                Some(code) => return Err(format!("`nix-store` failed (exit code {code})")),
+                None => return Err("`nix-store` failed".to_string()),
+            }
+        }
+
+
+        let rooted: HashSet<_> = String::from_utf8(output.stdout)
+            .map_err(|e| e.to_string())?
+            .lines()
+            .par_bridge()
+            .map(|l| l.split_once(" -> ").map(|tup| tup.1.to_owned()).ok_or("Unable to parse Nix output".to_owned()))
+            .collect::<Result<Vec<String>, String>>()?
+            .into_iter()
+            .map(|store_path| StorePath::new(store_path.into()))
+            .collect::<Result<HashSet<StorePath>, String>>()?;
+        println!("rooted: {}", rooted.len());
+
+        let paths: HashSet<_> = rooted.par_iter()
+            .map(|sp| sp.closure())
+            .collect::<Result<Vec<HashSet<StorePath>>, String>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        Ok(paths)
+    }
+
+    pub fn paths_dead() -> Result<HashSet<StorePath>, String> {
+        let mut alive = HashSet::default();
+        alive.par_extend(Self::paths_alive()?);
+        let dead: HashSet<_> = Self::all_paths()?
+            .par_iter()
+            .filter(|sp| !alive.contains(sp))
+            .cloned()
+            .collect();
+
+        Ok(dead)
+    }
+
+    fn paths_with_flag(flag: &str) -> Result<Vec<StorePath>, String> {
+        let output = process::Command::new("nix-store")
+            .arg("--gc")
+            .arg(flag)
+            .stdin(process::Stdio::inherit())
+            .stderr(process::Stdio::inherit())
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            match output.status.code() {
+                Some(code) => return Err(format!("`nix-store` failed (exit code {code})")),
+                None => return Err("`nix-store` failed".to_string()),
+            }
+        }
+
+        let mut paths: Vec<_> = String::from_utf8(output.stdout)
+            .map_err(|e| e.to_string())?
+            .lines()
+            .map(|p| StorePath::new(p.into()))
+            .flatten()
             .collect();
 
         paths.par_sort_by_key(|sp| sp.0.clone());
@@ -115,6 +192,13 @@ impl StorePath {
 
     pub fn size_naive(&self) -> u64 {
         files::dir_size_naive(&self.0)
+    }
+
+    pub fn size_all(store_paths: &[Self]) -> u64 {
+        let paths = store_paths.iter()
+            .map(|p| p.path().clone())
+            .collect::<Vec<_>>();
+        files::dir_size_considering_hardlinks_all(&paths)
     }
 
     pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
