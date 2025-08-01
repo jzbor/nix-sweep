@@ -1,9 +1,9 @@
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
-use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
-use rayon::slice::ParallelSliceMut;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::utils::caching::Cache;
 use crate::utils::files;
@@ -11,7 +11,8 @@ use crate::HashSet;
 
 
 pub const NIX_STORE: &str = "/nix/store";
-static CLOSURE_CACHE: Cache<StorePath, HashSet<StorePath>> = Cache::new();
+const CLOSURE_LOOKUP_CHUNK_SIZE: usize = 1024;
+static CLOSURE_CACHE: Cache<u64, HashSet<StorePath>> = Cache::new();
 
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
@@ -44,8 +45,6 @@ impl Store {
         let output = process::Command::new("nix-store")
             .arg("--gc")
             .arg(flag)
-            .stdin(process::Stdio::inherit())
-            .stderr(process::Stdio::inherit())
             .output()
             .map_err(|e| e.to_string())?;
 
@@ -154,14 +153,41 @@ impl StorePath {
     }
 
     pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
-        if let Some(closure) = CLOSURE_CACHE.lookup(self) {
+        Self::closure_helper(&[self])
+    }
+
+    pub fn closure_size(&self) -> u64 {
+        let closure: Vec<_> = self.closure().unwrap_or_default()
+            .iter()
+            .map(|sp| sp.path())
+            .cloned()
+            .collect();
+        files::dir_size_considering_hardlinks_all(&closure)
+    }
+
+    pub fn closure_size_naive(&self) -> u64 {
+       self.closure().unwrap_or_default()
+            .iter()
+            .map(|sp| sp.path())
+            .map(files::dir_size_naive)
+            .sum()
+    }
+
+    fn closure_helper(paths: &[&Self]) -> Result<HashSet<StorePath>, String> {
+        let key_hash = {
+            let mut hasher = crate::Hasher::default();
+            paths.hash(&mut hasher);
+            hasher.finish()
+        };
+        if let Some(closure) = CLOSURE_CACHE.lookup(&key_hash) {
             return Ok(closure);
         }
 
+        let paths: Vec<_> = paths.iter().map(|sp| sp.path().clone()).collect();
         let output = process::Command::new("nix-store")
             .arg("--query")
             .arg("--requisites")
-            .arg(&self.0)
+            .args(&paths)
             .stdin(process::Stdio::inherit())
             .stderr(process::Stdio::inherit())
             .output()
@@ -182,30 +208,15 @@ impl StorePath {
             .map_err(|e| e.to_string())
             .map(|i| i.into_iter().map(StorePath).collect())?;
 
-        CLOSURE_CACHE.insert(self.clone(), closure.clone());
+        CLOSURE_CACHE.insert(key_hash, closure.clone());
+
         Ok(closure)
     }
 
-    pub fn closure_size(&self) -> u64 {
-        let closure: Vec<_> = self.closure().unwrap_or_default()
-            .iter()
-            .map(|sp| sp.path())
-            .cloned()
-            .collect();
-        files::dir_size_considering_hardlinks_all(&closure)
-    }
-
-    pub fn closure_size_naive(&self) -> u64 {
-       self.closure().unwrap_or_default()
-            .iter()
-            .map(|sp| sp.path())
-            .map(files::dir_size_naive)
-            .sum()
-    }
-
-    pub fn full_closure(paths: &[Self]) -> HashSet<StorePath> {
-        paths.par_iter()
-            .flat_map(|p| p.closure())
+    pub fn full_closure(paths: &[&Self]) -> HashSet<StorePath> {
+        let chunks: Vec<_> = paths.chunks(CLOSURE_LOOKUP_CHUNK_SIZE).collect();
+        chunks.par_iter()
+            .flat_map(|c| Self::closure_helper(c))
             .flatten()
             .collect()
     }

@@ -182,10 +182,11 @@ impl GCRoot {
     }
 
     pub fn full_closure(roots: &[Self]) -> HashSet<StorePath> {
-        roots.par_iter()
-            .flat_map(|r| r.closure())
+        let paths: Vec<_> = roots.iter()
+            .map(|sp| sp.store_path())
             .flatten()
-            .collect()
+            .collect();
+        StorePath::full_closure(&paths)
     }
 
     pub fn full_closure_size(roots: &[Self]) -> Result<u64, String> {

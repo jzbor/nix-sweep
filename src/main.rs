@@ -19,6 +19,7 @@ const MAX_THREADS: usize = 4;
 
 type HashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 type HashSet<V> = rustc_hash::FxHashSet<V>;
+type Hasher = rustc_hash::FxHasher;
 
 /// Utility to clean up old Nix profile generations and left-over garbage collection roots
 ///
