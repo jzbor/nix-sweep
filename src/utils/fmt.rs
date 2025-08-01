@@ -63,7 +63,7 @@ impl FmtWithEllipsis {
         FmtWithEllipsis(s, actual_width, true)
     }
 
-    pub fn truncate(mut self, trunc: bool) -> Self {
+    pub fn truncate_if(mut self, trunc: bool) -> Self {
         self.2 = trunc;
         self
     }

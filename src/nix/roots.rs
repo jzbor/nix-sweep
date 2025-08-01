@@ -97,8 +97,7 @@ impl GCRoot {
         let roots: Vec<_> = String::from_utf8(output.stdout)
             .map_err(|e| e.to_string())?
             .lines()
-            .map(|l| l.split_once(" -> "))
-            .flatten()
+            .filter_map(|l| l.split_once(" -> "))
             .filter(|(link, _)| *link != "{censored}")
             .map(|(link, store_path)| (link, StorePath::new(store_path.into())))
             .map(|(link, store_path)| GCRoot::new_with_store_path(link.into(), store_path))
