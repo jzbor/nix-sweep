@@ -115,7 +115,7 @@ impl super::Command for GCRootsCommand {
 
         if !self.paths && !self.tsv && !self.no_size {
             println!();
-            let full_closure = GCRoot::full_closure(&roots)?;
+            let full_closure = GCRoot::full_closure(&roots);
             let total_size = GCRoot::full_closure_size(&roots)?;
             println!("Estimated total size: {} ({} store paths)",
                 FmtSize::new(total_size).to_string().yellow(), full_closure.len());

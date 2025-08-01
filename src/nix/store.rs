@@ -2,6 +2,7 @@ use std::str::FromStr;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
 
 use crate::utils::caching::Cache;
@@ -121,6 +122,10 @@ impl StorePath {
         files::dir_size_naive(&self.0)
     }
 
+    pub fn is_drv(&self) -> bool {
+        self.0.to_string_lossy().ends_with("drv")
+    }
+
     pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
         if let Some(closure) = CLOSURE_CACHE.lookup(self) {
             return Ok(closure);
@@ -170,4 +175,12 @@ impl StorePath {
             .map(files::dir_size_naive)
             .sum()
     }
+
+    pub fn full_closure(paths: &[Self]) -> HashSet<StorePath> {
+        paths.par_iter()
+            .flat_map(|p| p.closure())
+            .flatten()
+            .collect()
+    }
+
 }

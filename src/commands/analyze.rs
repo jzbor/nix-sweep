@@ -1,16 +1,17 @@
 use std::cmp::{self, Reverse};
-use std::path::{self, PathBuf};
+use std::path::PathBuf;
 
 use colored::Colorize;
 use rayon::slice::ParallelSliceMut;
 
-use crate::utils::files;
+use crate::utils::{files, journal};
 use crate::utils::fmt::*;
-use crate::utils::interaction::announce;
+use crate::utils::interaction::{announce, resolve};
 use crate::utils::journal::*;
 use crate::nix::profiles::Profile;
 use crate::nix::roots::GCRoot;
-use crate::nix::store::{Store, NIX_STORE};
+use crate::nix::store::{Store, StorePath, NIX_STORE};
+
 
 #[derive(clap::Args)]
 pub struct AnalyzeCommand {
@@ -33,8 +34,12 @@ pub struct AnalyzeCommand {
 
 struct StoreAnalysis {
     nstore_paths: usize,
+    ndrv_paths: usize,
+    ndrv_closure: usize,
     store_size_naive: u64,
     store_size_hl: u64,
+    drv_size: u64,
+    drv_closure_size: u64,
     journal_size: Option<u64>,
     blkdev_info: Option<(String, u64)>,
 }
@@ -53,22 +58,45 @@ struct GCRootsAnalysis {
 
 impl StoreAnalysis {
     fn create(journal: bool) -> Result<Self, String> {
-        let nstore_paths = Store::all_paths()?.len();
-        let ((store_size_naive, store_size_hl), journal_size) = rayon::join(
-            || rayon::join(
-                Store::size_naive,
-                Store::size
-            ),
-            || {
+        let store_paths = Store::all_paths()?;
+        let nstore_paths = store_paths.len();
+        let drv_paths: Vec<_> = store_paths.into_iter().filter(StorePath::is_drv).collect();
+        let ndrv_paths = drv_paths.len();
+
+        let mut store_size_naive = 0;
+        let mut store_size_hl = 0;
+        let mut drv_size = 0;
+        let mut drv_closure_size = 0;
+        let mut journal_size = None;
+        let mut ndrv_closure = 0;
+
+        rayon::scope(|s| {
+            s.spawn(|_| {
+                store_size_naive = resolve(Store::size_naive());
+            });
+
+            s.spawn(|_| {
+                store_size_hl = resolve(Store::size());
+            });
+
+            s.spawn(|_| {
                 if journal && journal_exists() {
-                    Some(journal_size())
-                } else {
-                    None
+                    journal_size = Some(journal::journal_size());
                 }
-            }
-        );
-        let store_size_naive = store_size_naive?;
-        let store_size_hl = store_size_hl?;
+            });
+
+            s.spawn(|_| {
+                let paths: Vec<_> = drv_paths.iter().map(|sp| sp.path().clone()).collect();
+                drv_size = files::dir_size_considering_hardlinks_all(&paths);
+            });
+
+            s.spawn(|_| {
+                let drv_closure: Vec<_> = StorePath::full_closure(&drv_paths).into_iter().collect();
+                ndrv_closure = drv_closure.len();
+                let paths: Vec<_> = drv_closure.iter().map(|sp| sp.path().clone()).collect();
+                drv_closure_size = files::dir_size_considering_hardlinks_all(&paths)
+            });
+        });
 
         let blkdev_info = Store::blkdev()
             .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)))
@@ -76,6 +104,7 @@ impl StoreAnalysis {
 
         Ok(StoreAnalysis {
             nstore_paths, store_size_naive, store_size_hl,
+            ndrv_paths, ndrv_closure, drv_size, drv_closure_size,
             blkdev_info, journal_size,
         })
     }
@@ -98,21 +127,29 @@ impl StoreAnalysis {
         if let Some(journal_size) = self.journal_size {
             print!("{:<20} {:>11}", format!("{}:", JOURNAL_PATH), FmtSize::new(journal_size).left_pad().yellow());
 
-            let blkdev_info = files::blkdev_of_path(&path::PathBuf::from(JOURNAL_PATH))
-                .and_then(|d| files::get_blkdev_size(&d).map(|s| (d, s)));
-            if let Ok((dev, size)) = blkdev_info {
-                let percent_str = FmtPercentage::new(journal_size, size).left_pad();
-                println!("\t({} of {} [{}])", percent_str, dev, FmtSize::new(size));
+            if let Some((dev, size)) = &self.blkdev_info {
+                let percent_str = FmtPercentage::new(journal_size, *size).left_pad();
+                println!("\t({} of {} [{}])", percent_str, dev, FmtSize::new(*size));
             } else {
                 println!();
             }
         }
 
         println!();
-        println!("Number of store paths:      \t{}", self.nstore_paths.to_string().bright_blue());
+        println!("Number of store paths:           \t{}", self.nstore_paths.to_string().bright_blue());
+        println!("Derivation (.drv) files in store:\t{}\t{} {}",
+            self.ndrv_paths.to_string().cyan(),
+            FmtSize::new(self.drv_size).left_pad().cyan(),
+            FmtPercentage::new(self.drv_size, self.store_size_hl).bracketed().right_pad(),
+        );
+        println!("Closure of .drv files in store:  \t{}\t{} {}",
+            self.ndrv_closure.to_string().bright_cyan(),
+            FmtSize::new(self.drv_closure_size).left_pad().bright_cyan(),
+            FmtPercentage::new(self.drv_closure_size, self.store_size_hl).bracketed().right_pad(),
+        );
 
         if self.store_size_naive > self.store_size_hl {
-            println!("Hardlinking currently saves:\t{}", size::Size::from_bytes(self.store_size_naive - self.store_size_hl).to_string().green());
+            println!("Hardlinking currently saves:    \t{}", size::Size::from_bytes(self.store_size_naive - self.store_size_hl).to_string().green());
         }
 
         Ok(())

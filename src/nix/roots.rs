@@ -181,16 +181,15 @@ impl GCRoot {
         self.store_path.clone().map(|sp| sp.closure_size())
     }
 
-    pub fn full_closure(roots: &[Self]) -> Result<HashSet<StorePath>, String> {
-        let full_closure: HashSet<_> = roots.par_iter()
+    pub fn full_closure(roots: &[Self]) -> HashSet<StorePath> {
+        roots.par_iter()
             .flat_map(|r| r.closure())
             .flatten()
-            .collect();
-        Ok(full_closure)
+            .collect()
     }
 
     pub fn full_closure_size(roots: &[Self]) -> Result<u64, String> {
-        let full_closure: Vec<_> = Self::full_closure(roots)?
+        let full_closure: Vec<_> = Self::full_closure(roots)
             .iter()
             .map(|sp| sp.path())
             .cloned()
