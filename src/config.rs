@@ -77,6 +77,7 @@ pub struct ConfigPreset {
 
     /// Collect just as much garbage as to match --gc-bigger or --gc-quota
     #[clap(short, long)]
+    #[serde(default)]
     pub gc_modest: bool,
 }
 
