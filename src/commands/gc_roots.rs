@@ -44,9 +44,11 @@ pub struct GCRootsCommand {
     #[clap(short, long)]
     exclude_inaccessible: bool,
 
+    /// Only show gc roots older than OLDER
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
     older: Option<Duration>,
 
+    /// Only show gc roots newer than NEWER
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
     newer: Option<Duration>,
 

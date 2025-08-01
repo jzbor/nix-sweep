@@ -14,7 +14,7 @@ use crate::nix::roots::GCRoot;
 #[derive(clap::Args)]
 pub struct TidyupGCRootsCommand {
     /// Delete all qualifying gc roots without asking for user confirmation
-    #[clap(short, long)]
+   #[clap(short, long)]
     force: bool,
 
     /// Include profiles
@@ -33,9 +33,11 @@ pub struct TidyupGCRootsCommand {
     #[clap(short, long)]
     exclude_inaccessible: bool,
 
+    /// Only show gc roots older than OLDER
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
     older: Option<Duration>,
 
+    /// Only show gc roots newer than NEWER
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
     newer: Option<Duration>,
 
