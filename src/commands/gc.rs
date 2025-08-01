@@ -28,11 +28,15 @@ pub struct GCCommand {
     /// Don't actually run garbage collection
     #[clap(short, long)]
     dry_run: bool,
+
+    ///
+    #[clap(short, long)]
+    modest: bool,
 }
 
 impl GCCommand {
     pub fn new(interactive: bool, dry_run: bool, bigger: Option<u64>, quota: Option<u64>) -> Self {
-        GCCommand { interactive, dry_run, bigger, quota, _non_interactive: !interactive}
+        GCCommand { interactive, dry_run, bigger, quota, _non_interactive: !interactive, modest: false }
     }
 }
 
@@ -68,13 +72,29 @@ impl super::Command for GCCommand {
             }
         }
 
+        let max_freed = if self.modest {
+            if let Some(bigger) = self.bigger {
+                Some(Store::size()? - bigger * GIB)
+            } else if let Some(quota) = self.quota {
+                let blkdev_size = files::get_blkdev_size(&Store::blkdev()?)?;
+                Some(Store::size()? - quota * blkdev_size / 100)
+            } else {
+                return Err("Cannot use --modest without --bigger or --quota being".to_owned());
+            }
+        } else {
+            None
+        };
+
+        if let Some(bytes) = max_freed {
+            eprintln!("Freeing up to {} (--modest)", FmtSize::new(bytes));
+        }
 
         if self.dry_run {
             announce("Skipping garbage collection (dry run)".to_owned());
         } else {
             announce("Running garbage collection".to_owned());
             if !self.interactive || ask("Do you want to perform garbage collection now?", false) {
-                Store::gc()?
+                Store::gc(max_freed)?
             }
         }
 

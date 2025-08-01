@@ -71,9 +71,13 @@ impl Store {
         files::blkdev_of_path(Path::new(NIX_STORE))
     }
 
-    pub fn gc() -> Result<(), String> {
-        let result = process::Command::new("nix-store")
-            .arg("--gc")
+    pub fn gc(max_freed: Option<u64>) -> Result<(), String> {
+        let mut command = process::Command::new("nix-store");
+        command.arg("--gc");
+        if let Some(amount) = max_freed {
+            command.args(["--max-freed".to_owned(), format!("{}", amount)]);
+        }
+        let result = command
             .stdin(process::Stdio::inherit())
             .stdout(process::Stdio::inherit())
             .stderr(process::Stdio::inherit())
