@@ -15,13 +15,13 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
 use crate::config;
-use crate::files::dir_size_considering_hardlinks_all;
-use crate::fmt::FmtAge;
-use crate::fmt::FmtSize;
-use crate::fmt::Formattable;
-use crate::interaction::announce;
-use crate::ordered_channel::OrderedChannel;
-use crate::store::StorePath;
+use crate::utils::files::dir_size_considering_hardlinks_all;
+use crate::utils::fmt::FmtAge;
+use crate::utils::fmt::FmtSize;
+use crate::utils::fmt::Formattable;
+use crate::utils::interaction::announce;
+use crate::utils::ordered_channel::OrderedChannel;
+use crate::nix::store::StorePath;
 use crate::HashSet;
 
 

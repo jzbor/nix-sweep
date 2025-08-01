@@ -4,14 +4,13 @@ use std::path;
 use colored::Colorize;
 use rayon::slice::ParallelSliceMut;
 
-use crate::files;
-use crate::fmt::*;
-use crate::interaction::announce;
-use crate::journal::*;
-use crate::profiles::Profile;
-use crate::roots::GCRoot;
-use crate::roots;
-use crate::store::{Store, NIX_STORE};
+use crate::utils::files;
+use crate::utils::fmt::*;
+use crate::utils::interaction::announce;
+use crate::utils::journal::*;
+use crate::nix::profiles::Profile;
+use crate::nix::roots::GCRoot;
+use crate::nix::store::{Store, NIX_STORE};
 
 #[derive(clap::Args)]
 pub struct AnalyzeCommand {
@@ -69,7 +68,7 @@ impl super::Command for AnalyzeCommand {
         };
 
         eprintln!("Indexing gc roots...");
-        let gc_roots: Vec<_> = roots::gc_roots(false)?
+        let gc_roots: Vec<_> = GCRoot::all(false)?
             .into_iter()
             .filter(|r| !r.is_profile() && !r.is_current())
             .collect();

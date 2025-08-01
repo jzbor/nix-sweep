@@ -9,9 +9,9 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rayon::slice::ParallelSliceMut;
 
-use crate::files::dir_size_considering_hardlinks_all;
-use crate::fmt::*;
-use crate::store::StorePath;
+use crate::utils::files::dir_size_considering_hardlinks_all;
+use crate::utils::fmt::*;
+use crate::nix::store::StorePath;
 use crate::HashSet;
 
 
@@ -39,6 +39,25 @@ impl GCRoot {
         };
 
         Ok(GCRoot { link, age, store_path })
+    }
+
+    pub fn all(include_missing: bool) -> Result<Vec<Self>, String> {
+        let gc_roots_dir = PathBuf::from_str(GC_ROOTS_DIR)
+            .map_err(|e| e.to_string())?;
+        let link_locations = find_links(&gc_roots_dir, Vec::new())?;
+        let links: Result<Vec<_>, _> = link_locations.into_iter()
+            .map(fs::read_link)
+            .filter(|r_res| if let Ok(r) = r_res { include_missing || fs::exists(r).unwrap_or(true) } else { true } )
+            .collect();
+
+
+        let mut roots = Vec::new();
+        for link_path in links.map_err(|e| e.to_string())? {
+            let new = GCRoot::new(link_path)?;
+            roots.push(new)
+        }
+
+        Ok(roots)
     }
 
     pub fn link(&self) -> &PathBuf {
@@ -71,7 +90,7 @@ impl GCRoot {
     }
 
     pub fn profile_paths() -> Result<Vec<PathBuf>, String> {
-        let links: Option<Vec<_>> = gc_roots(false)?.into_iter()
+        let links: Option<Vec<_>> = Self::all(false)?.into_iter()
             .filter(|r| r.is_profile())
             .map(|r| r.link().to_str().map(|s| s.to_owned()))
             .collect();
@@ -231,23 +250,4 @@ fn find_links(path: &PathBuf, mut links: Vec<PathBuf>) -> Result<Vec<PathBuf>, S
     }
 
     Ok(links)
-}
-
-pub fn gc_roots(include_missing: bool) -> Result<Vec<GCRoot>, String> {
-    let gc_roots_dir = PathBuf::from_str(GC_ROOTS_DIR)
-        .map_err(|e| e.to_string())?;
-    let link_locations = find_links(&gc_roots_dir, Vec::new())?;
-    let links: Result<Vec<_>, _> = link_locations.into_iter()
-        .map(fs::read_link)
-        .filter(|r_res| if let Ok(r) = r_res { include_missing || fs::exists(r).unwrap_or(true) } else { true } )
-        .collect();
-
-
-    let mut roots = Vec::new();
-    for link_path in links.map_err(|e| e.to_string())? {
-        let new = GCRoot::new(link_path)?;
-        roots.push(new)
-    }
-
-    Ok(roots)
 }

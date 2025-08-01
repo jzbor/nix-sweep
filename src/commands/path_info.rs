@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use colored::Colorize;
 
-use crate::fmt::*;
-use crate::store::StorePath;
+use crate::utils::fmt::*;
+use crate::nix::store::StorePath;
 
 
 #[derive(clap::Args)]

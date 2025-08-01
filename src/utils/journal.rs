@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::files;
+use crate::utils::files;
 
 pub const JOURNAL_PATH: &str = "/var/log/journal";
 

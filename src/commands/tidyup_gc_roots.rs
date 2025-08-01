@@ -6,10 +6,9 @@ use colored::Colorize;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
 
-use crate::interaction::*;
-use crate::ordered_channel::OrderedChannel;
-use crate::roots;
-use crate::roots::GCRoot;
+use crate::utils::interaction::*;
+use crate::utils::ordered_channel::OrderedChannel;
+use crate::nix::roots::GCRoot;
 
 
 #[derive(clap::Args)]
@@ -47,7 +46,7 @@ pub struct TidyupGCRootsCommand {
 
 impl super::Command for TidyupGCRootsCommand {
     fn run(self) -> Result<(), String> {
-        let mut roots = roots::gc_roots(self.include_missing)?;
+        let mut roots = GCRoot::all(self.include_missing)?;
         let print_size = !(self.no_size || self.force);
 
         roots.par_sort_by_key(|r| r.link().clone());

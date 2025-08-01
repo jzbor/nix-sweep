@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 
 use rayon::slice::ParallelSliceMut;
 
-use crate::caching::Cache;
-use crate::{files::{self, *}, HashSet};
+use crate::utils::caching::Cache;
+use crate::utils::files;
+use crate::HashSet;
 
 
 pub const NIX_STORE: &str = "/nix/store";
@@ -62,7 +63,7 @@ impl Store {
 
     pub fn size() -> Result<u64, String> {
         let store_path = std::path::PathBuf::from(NIX_STORE);
-        let size = dir_size_considering_hardlinks(&store_path);
+        let size = files::dir_size_considering_hardlinks(&store_path);
         Ok(size)
     }
 
@@ -109,11 +110,11 @@ impl StorePath {
     }
 
     pub fn size(&self) -> u64 {
-        dir_size_considering_hardlinks(&self.0)
+        files::dir_size_considering_hardlinks(&self.0)
     }
 
     pub fn size_naive(&self) -> u64 {
-        dir_size_naive(&self.0)
+        files::dir_size_naive(&self.0)
     }
 
     pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
@@ -155,14 +156,14 @@ impl StorePath {
             .map(|sp| sp.path())
             .cloned()
             .collect();
-        dir_size_considering_hardlinks_all(&closure)
+        files::dir_size_considering_hardlinks_all(&closure)
     }
 
     pub fn closure_size_naive(&self) -> u64 {
        self.closure().unwrap_or_default()
             .iter()
             .map(|sp| sp.path())
-            .map(dir_size_naive)
+            .map(files::dir_size_naive)
             .sum()
     }
 }

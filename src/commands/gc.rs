@@ -1,7 +1,7 @@
-use crate::files;
-use crate::fmt::{FmtPercentage, FmtSize};
-use crate::interaction::{announce, ask};
-use crate::store::Store;
+use crate::utils::files;
+use crate::utils::fmt::{FmtPercentage, FmtSize};
+use crate::utils::interaction::{announce, ask};
+use crate::nix::store::Store;
 
 
 const GIB: u64 = 1024 * 1024 * 1024;

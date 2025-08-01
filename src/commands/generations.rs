@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::profiles::Profile;
+use crate::nix::profiles::Profile;
 
 
 #[derive(clap::Args)]

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 
-use crate::caching::Cache;
+use crate::utils::caching::Cache;
 use crate::HashMap;
 
 
@@ -22,7 +22,7 @@ pub fn dir_size_naive(path: &PathBuf) -> u64 {
     };
     let ft = metadata.file_type();
 
-    
+
 
     if ft.is_dir() {
         let read_dir = match fs::read_dir(path) {
@@ -103,7 +103,7 @@ fn dir_size_hl_helper(path: &PathBuf) -> HashMap<InoKey, u64> {
             Ok(rd) => rd,
             Err(_) => return HashMap::default(),
         };
-        
+
         read_dir.into_iter()
             .par_bridge()
             .flatten()

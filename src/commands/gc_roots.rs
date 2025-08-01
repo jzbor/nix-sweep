@@ -5,11 +5,10 @@ use colored::Colorize;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
 
-use crate::fmt::*;
-use crate::interaction::announce;
-use crate::ordered_channel::OrderedChannel;
-use crate::roots::GCRoot;
-use crate::roots;
+use crate::utils::fmt::*;
+use crate::utils::interaction::announce;
+use crate::utils::ordered_channel::OrderedChannel;
+use crate::nix::roots::GCRoot;
 
 #[derive(clap::Args)]
 pub struct GCRootsCommand {
@@ -55,7 +54,7 @@ pub struct GCRootsCommand {
 impl super::Command for GCRootsCommand {
     fn run(self) -> Result<(), String> {
         let print_size = !(self.no_size || self.paths);
-        let mut roots = roots::gc_roots(self.include_missing)?;
+        let mut roots = GCRoot::all(self.include_missing)?;
         let nroots_total = roots.len();
         roots.par_sort_by_key(|r| r.link().clone());
         roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));

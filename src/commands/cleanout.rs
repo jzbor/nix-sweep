@@ -4,9 +4,9 @@ use std::str::FromStr;
 use colored::Colorize;
 
 use crate::config::{self, ConfigPreset};
-use crate::interaction::*;
-use crate::fmt::FmtAge;
-use crate::profiles::Profile;
+use crate::utils::interaction::*;
+use crate::utils::fmt::FmtAge;
+use crate::nix::profiles::Profile;
 
 use super::gc::GCCommand;
 

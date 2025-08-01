@@ -5,19 +5,12 @@ use clap::Parser;
 use rayon::ThreadPoolBuilder;
 
 use crate::commands::Command;
-use crate::interaction::resolve;
+use crate::utils::interaction::resolve;
 
 mod config;
-mod profiles;
-mod store;
-mod roots;
-mod journal;
-mod files;
-mod caching;
-mod fmt;
+mod nix;
+mod utils;
 mod commands;
-mod interaction;
-mod ordered_channel;
 
 
 const THREADS_ENV_VAR: &str = "NIX_SWEEP_NUM_THREADS";
