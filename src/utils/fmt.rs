@@ -1,8 +1,9 @@
-use std::cmp;
+use std::{cmp, io};
 use std::{fmt::Display, time::Duration};
 
 use size::Size;
-use terminal_size::terminal_size;
+
+use super::terminal::terminal_width;
 
 
 pub trait Formattable: Display {
@@ -55,8 +56,8 @@ impl FmtPercentage {
 
 impl FmtWithEllipsis {
     pub fn fitting_terminal(s: String, preferred_width: usize, leave_space: usize) -> Self {
-        let actual_width = match terminal_size() {
-            Some((tw, _)) => cmp::min((tw.0 as usize).saturating_sub(leave_space), preferred_width),
+        let actual_width = match terminal_width(io::stdout()).ok() {
+            Some(tw) => cmp::min(tw.saturating_sub(leave_space), preferred_width),
             None => preferred_width,
         };
         FmtWithEllipsis(s, actual_width, true)
