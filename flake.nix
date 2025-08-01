@@ -105,6 +105,12 @@
         description = "Only perform gc if store uses more than this many % of its device";
       };
 
+      gcModest = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Stop gc when meeting the quota or limit";
+      };
+
       gcInterval = lib.mkOption {
         type = lib.types.str;
         inherit (interval) default;
@@ -120,6 +126,7 @@
       ] ++ (if cfg.gc && cfg.gcInterval == cfg.interval then [ "--gc" ] else [])
         ++ (if cfg.gcBigger == null then [] else [ "--gc-bigger" (toString cfg.gcBigger) ])
         ++ (if cfg.gcQuota == null then [] else [ "--gc-quota" (toString cfg.gcQuota) ])
+        ++ (if cfg.gcModest then [ "--gc-modest" ] else [])
         ++ (if cfg.keepMin == null then [] else [ "--keep-min" (toString cfg.keepMin) ])
         ++ (if cfg.keepMax == null then [] else [ "--keep-max" (toString cfg.keepMax) ])
         ++ (if cfg.keepNewer == null then [] else [ "--keep-newer" cfg.keepNewer ])
@@ -133,6 +140,7 @@
         "--non-interactive"
       ] ++ (if cfg.gcBigger == null then [] else [ "--bigger" (toString cfg.gcBigger) ])
         ++ (if cfg.gcQuota == null then [] else [ "--quota" (toString cfg.gcQuota) ])
+        ++ (if cfg.gcModest then [ "--modest" ] else [])
       );
     };
   in {

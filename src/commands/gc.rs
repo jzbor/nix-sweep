@@ -39,8 +39,8 @@ pub struct GCCommand {
 }
 
 impl GCCommand {
-    pub fn new(interactive: bool, dry_run: bool, bigger: Option<u64>, quota: Option<u64>) -> Self {
-        GCCommand { interactive, dry_run, bigger, quota, _non_interactive: !interactive, modest: false }
+    pub fn new(interactive: bool, dry_run: bool, bigger: Option<u64>, quota: Option<u64>, modest: bool) -> Self {
+        GCCommand { interactive, dry_run, bigger, quota, _non_interactive: !interactive, modest }
     }
 }
 

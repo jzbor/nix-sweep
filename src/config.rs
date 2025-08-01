@@ -74,6 +74,10 @@ pub struct ConfigPreset {
     /// Only perform gc if the store uses more than QUOTA% of its device.
     #[clap(long, value_parser=clap::value_parser!(u64).range(0..100))]
     pub gc_quota: Option<u64>,
+
+    /// Collect just as much garbage as to match --gc-bigger or --gc-quota
+    #[clap(short, long)]
+    pub gc_modest: bool,
 }
 
 impl ConfigFile {
@@ -244,11 +248,13 @@ impl ConfigPreset {
             }
         }
 
+        let gc_modest = self.gc_modest || other.gc_modest;
+
         ConfigPreset {
             keep_min, keep_max, keep_newer, remove_older,
             interactive, _non_interactive: None,
-            gc, gc_bigger, gc_quota,
-            generations: other.generations.clone()
+            gc, gc_bigger, gc_quota, gc_modest,
+            generations: other.generations.clone(),
         }
     }
 
@@ -271,6 +277,7 @@ impl ConfigPreset {
             gc: self.gc,
             gc_bigger: if let Some(0) = self.gc_bigger { None } else { self.gc_bigger },
             gc_quota: if let Some(0) = self.gc_quota { None } else { self.gc_quota },
+            gc_modest: self.gc_modest,
             generations: self.generations.clone(),
         }
     }
@@ -288,6 +295,7 @@ impl Default for ConfigPreset {
             gc: None,
             gc_bigger: None,
             gc_quota: None,
+            gc_modest: false,
             generations: Vec::default(),
         }
     }
