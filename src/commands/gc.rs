@@ -46,16 +46,17 @@ impl GCCommand {
 
 impl super::Command for GCCommand {
     fn run(self) -> Result<(), String> {
+        announce("Starting garbage collection".to_owned());
         if let Some(bigger) = self.bigger {
             eprintln!("Calculating store size...");
             let size = Store::size()?;
-            eprintln!("Store has a size of {}", FmtSize::new(size));
+            eprintln!("Store has a size of {} (threshold: {})", FmtSize::new(size), FmtSize::new(bigger * GIB));
             if size <= bigger * GIB {
                 let msg = format!("Nothing to do: Store size is at {} ({} below the threshold of {})",
                     FmtSize::new(size),
                     FmtSize::new(bigger * GIB - size),
                     FmtSize::new(bigger * GIB));
-                announce(msg);
+                eprintln!("\n-> {msg}");
                 return Ok(());
             }
         }
@@ -63,15 +64,14 @@ impl super::Command for GCCommand {
         if let Some(quota) = self.quota {
             eprintln!("Calculating store size...");
             let size = Store::size()?;
-            eprintln!("Store has a size of {}", FmtSize::new(size));
-
             let blkdev_size = files::get_blkdev_size(&Store::blkdev()?)?;
             let percentage = size * 100 / blkdev_size;
+            eprintln!("Store uses {percentage}% (quota: {quota}%)");
             if percentage <= quota {
                 let msg = format!("Nothing to do: Device usage of store is at {} (below the threshold of {})",
                     FmtPercentage::new(size, blkdev_size),
                     FmtPercentage::new(quota, 100));
-                announce(msg);
+                eprintln!("\n-> {msg}");
                 return Ok(());
             }
         }
@@ -94,10 +94,10 @@ impl super::Command for GCCommand {
         }
 
         if self.dry_run {
-            announce("Skipping garbage collection (dry run)".to_owned());
+            eprintln!("\n-> Skipping garbage collection (dry run)");
         } else {
-            announce("Running garbage collection".to_owned());
-            if !self.interactive || ask("Do you want to perform garbage collection now?", false) {
+            if !self.interactive || ask("\nDo you want to perform garbage collection now?", false) {
+                eprintln!("Starting garbage collector");
                 Store::gc(max_freed)?
             }
         }
