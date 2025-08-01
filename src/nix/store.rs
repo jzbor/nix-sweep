@@ -2,7 +2,7 @@ use std::str::FromStr;
 use std::{fs, process};
 use std::path::{Path, PathBuf};
 
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
 
 use crate::utils::caching::Cache;
@@ -21,20 +21,47 @@ pub struct Store();
 
 
 impl Store {
-    pub fn all_paths() -> Result<Vec<StorePath>, String> {
+    pub fn all_paths() -> Result<HashSet<StorePath>, String> {
         let read_dir = match fs::read_dir(NIX_STORE) {
             Ok(rd) => rd,
             Err(e) => return Err(e.to_string()),
         };
-        let mut paths: Vec<_> = read_dir.into_iter()
+
+        let paths = read_dir.into_iter()
             .flatten()
             .map(|e| e.path())
             .filter(|p| Self::is_valid_path(p))
             .flat_map(StorePath::new)
             .collect();
+        Ok(paths)
+    }
 
-        paths.par_sort_by_key(|sp| sp.0.clone());
-        paths.dedup();
+    pub fn paths_dead() -> Result<HashSet<StorePath>, String> {
+        Self::paths_with_flag("--print-dead")
+    }
+
+    fn paths_with_flag(flag: &str) -> Result<HashSet<StorePath>, String> {
+        let output = process::Command::new("nix-store")
+            .arg("--gc")
+            .arg(flag)
+            .stdin(process::Stdio::inherit())
+            .stderr(process::Stdio::inherit())
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            match output.status.code() {
+                Some(code) => return Err(format!("`nix-store` failed (exit code {code})")),
+                None => return Err("`nix-store` failed".to_string()),
+            }
+        }
+
+        let paths: HashSet<_> = String::from_utf8(output.stdout)
+            .map_err(|e| e.to_string())?
+            .lines()
+            .map(|p| StorePath::new(p.into()))
+            .flatten()
+            .collect();
 
         Ok(paths)
     }

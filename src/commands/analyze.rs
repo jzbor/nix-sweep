@@ -27,6 +27,10 @@ pub struct AnalyzeCommand {
     #[clap(short, long)]
     full_paths: bool,
 
+    /// Print information about dead paths
+    #[clap(short, long)]
+    dead: bool,
+
     /// Show n gc-roots and profiles
     #[clap(long, default_value_t = 5)]
     show: usize,
@@ -42,6 +46,7 @@ struct StoreAnalysis {
     drv_closure_size: u64,
     journal_size: Option<u64>,
     blkdev_info: Option<(String, u64)>,
+    dead_info: Option<(usize, u64)>,
 }
 
 struct ProfileAnalysis {
@@ -57,7 +62,7 @@ struct GCRootsAnalysis {
 
 
 impl StoreAnalysis {
-    fn create(journal: bool) -> Result<Self, String> {
+    fn create(journal: bool, dead: bool) -> Result<Self, String> {
         let store_paths = Store::all_paths()?;
         let nstore_paths = store_paths.len();
         let drv_paths: Vec<_> = store_paths.into_iter().filter(StorePath::is_drv).collect();
@@ -69,6 +74,7 @@ impl StoreAnalysis {
         let mut drv_closure_size = 0;
         let mut journal_size = None;
         let mut ndrv_closure = 0;
+        let mut dead_info = None;
 
         rayon::scope(|s| {
             s.spawn(|_| {
@@ -96,6 +102,14 @@ impl StoreAnalysis {
                 let paths: Vec<_> = drv_closure.iter().map(|sp| sp.path().clone()).collect();
                 drv_closure_size = files::dir_size_considering_hardlinks_all(&paths)
             });
+
+            if dead {
+                s.spawn(|_| {
+                    let dead_paths = resolve(Store::paths_dead());
+                    let paths: Vec<_> = dead_paths.iter().map(|sp| sp.path().clone()).collect();
+                    dead_info = Some((dead_paths.len(), files::dir_size_considering_hardlinks_all(&paths)));
+                })
+            }
         });
 
         let blkdev_info = Store::blkdev()
@@ -105,7 +119,7 @@ impl StoreAnalysis {
         Ok(StoreAnalysis {
             nstore_paths, store_size_naive, store_size_hl,
             ndrv_paths, ndrv_closure, drv_size, drv_closure_size,
-            blkdev_info, journal_size,
+            blkdev_info, dead_info, journal_size,
         })
     }
 
@@ -147,6 +161,13 @@ impl StoreAnalysis {
             FmtSize::new(self.drv_closure_size).left_pad().bright_cyan(),
             FmtPercentage::new(self.drv_closure_size, self.store_size_hl).bracketed().right_pad(),
         );
+        if let Some((ndead, dead_size)) = self.dead_info {
+            println!("Dead paths:                      \t{}\t{} {}",
+                ndead.to_string().bright_red(),
+                FmtSize::new(dead_size).left_pad().bright_red(),
+                FmtPercentage::new(dead_size, self.store_size_hl).bracketed().right_pad(),
+            );
+        }
 
         if self.store_size_naive > self.store_size_hl {
             println!("Hardlinking currently saves:    \t{}", size::Size::from_bytes(self.store_size_naive - self.store_size_hl).to_string().green());
@@ -296,7 +317,7 @@ impl super::Command for AnalyzeCommand {
         eprintln!("Indexing store, profiles and gc roots...");
         rayon::scope(|s| {
             s.spawn(|_| {
-                store_analysis = StoreAnalysis::create(!self.no_journal);
+                store_analysis = StoreAnalysis::create(!self.no_journal, self.dead);
                 eprintln!("Finished store indexing");
             });
 
