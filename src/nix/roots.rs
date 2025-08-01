@@ -1,3 +1,4 @@
+use std::process;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::fs;
@@ -28,6 +29,10 @@ pub struct GCRoot {
 impl GCRoot {
     fn new(link: PathBuf) -> Result<Self, String> {
         let store_path = StorePath::from_symlink(&link);
+        Self::new_with_store_path(link, store_path)
+    }
+
+    fn new_with_store_path(link: PathBuf, store_path: Result<StorePath, String>) -> Result<Self, String> {
         let last_modified = fs::symlink_metadata(&link)
             .and_then(|m| m.modified())
             .map_err(|e| format!("Unable to get metadata for path {}: {}", link.to_string_lossy(), e));
@@ -41,7 +46,7 @@ impl GCRoot {
         Ok(GCRoot { link, age, store_path })
     }
 
-    pub fn all(include_missing: bool) -> Result<Vec<Self>, String> {
+    pub fn all_search_directory(include_missing: bool) -> Result<Vec<Self>, String> {
         let gc_roots_dir = PathBuf::from_str(GC_ROOTS_DIR)
             .map_err(|e| e.to_string())?;
         let link_locations = find_links(&gc_roots_dir, Vec::new())?;
@@ -60,12 +65,58 @@ impl GCRoot {
         Ok(roots)
     }
 
+    pub fn all(query_nix: bool, include_proc: bool, include_missing: bool) -> Result<Vec<Self>, String> {
+        if include_proc {
+            Self::all_with_proc()
+        } else if query_nix {
+            let mut roots = Self::all_with_proc()?;
+            roots.retain(|r| !r.is_proc());
+            Ok(roots)
+        } else {
+            Self::all_search_directory(include_missing)
+        }
+
+    }
+
+    pub fn all_with_proc() -> Result<Vec<Self>, String> {
+        let output = process::Command::new("nix-store")
+            .arg("--gc")
+            .arg("--print-roots")
+            .stdin(process::Stdio::inherit())
+            .stderr(process::Stdio::inherit())
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            match output.status.code() {
+                Some(code) => return Err(format!("`nix-store` failed (exit code {code})")),
+                None => return Err("`nix-store` failed".to_string()),
+            }
+        }
+
+        let roots: Vec<_> = String::from_utf8(output.stdout)
+            .map_err(|e| e.to_string())?
+            .lines()
+            .map(|l| l.split_once(" -> "))
+            .flatten()
+            .filter(|(link, _)| *link != "{censored}")
+            .map(|(link, store_path)| (link, StorePath::new(store_path.into())))
+            .map(|(link, store_path)| GCRoot::new_with_store_path(link.into(), store_path))
+            .collect::<Result<Vec<Self>, String>>()?;
+
+        Ok(roots)
+    }
+
     pub fn link(&self) -> &PathBuf {
         &self.link
     }
 
     pub fn store_path(&self) -> Result<&StorePath, &String> {
         self.store_path.as_ref()
+    }
+
+    pub fn is_accessible(&self) -> bool {
+        self.store_path().is_ok()
     }
 
     pub fn is_profile(&self) -> bool {
@@ -81,8 +132,12 @@ impl GCRoot {
         || self.link.ends_with("nix/flake-registry.json")
     }
 
-    pub fn is_accessible(&self) ->bool {
-        self.store_path().is_ok()
+    pub fn is_proc(&self) -> bool {
+        self.link().starts_with("/proc")
+    }
+
+    pub fn is_independent(&self) -> bool {
+        !self.is_profile() && !self.is_current() && !self.is_proc()
     }
 
     pub fn age(&self) -> Result<&Duration, &String> {
@@ -90,7 +145,7 @@ impl GCRoot {
     }
 
     pub fn profile_paths() -> Result<Vec<PathBuf>, String> {
-        let links: Option<Vec<_>> = Self::all(false)?.into_iter()
+        let links: Option<Vec<_>> = Self::all(false, false, false)?.into_iter()
             .filter(|r| r.is_profile())
             .map(|r| r.link().to_str().map(|s| s.to_owned()))
             .collect();
@@ -194,11 +249,19 @@ impl GCRoot {
     }
 
     pub fn print_fancy(&self, closure_size: Option<u64>, show_size: bool) {
-        let attributes = match (self.is_profile(), self.is_current()) {
-            (true, true) => "(profile, current)",
-            (true, false) => "(profile)",
-            (false, true) => "(current)",
-            (false, false) => "(other)",
+        let attribute_items: Vec<String> = [
+            (self.is_profile(), "profile"),
+            (self.is_current(), "current"),
+            (self.is_proc(), "process"),
+        ].iter()
+            .map(|(b, n)| if *b { n.to_string() } else { String::new() })
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let attributes = if attribute_items.is_empty() {
+            "(other)".to_owned()
+        } else {
+            format!("({})", attribute_items.join(", "))
         };
 
         let age_str = self.age()

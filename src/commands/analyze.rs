@@ -68,9 +68,9 @@ impl super::Command for AnalyzeCommand {
         };
 
         eprintln!("Indexing gc roots...");
-        let gc_roots: Vec<_> = GCRoot::all(false)?
+        let gc_roots: Vec<_> = GCRoot::all(false, false, false)?
             .into_iter()
-            .filter(|r| !r.is_profile() && !r.is_current())
+            .filter(|r| r.is_independent())
             .collect();
         let mut sorted_gc_roots = Vec::with_capacity(gc_roots.len());
         for root in gc_roots {

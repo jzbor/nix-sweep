@@ -12,6 +12,10 @@ use crate::nix::roots::GCRoot;
 
 #[derive(clap::Args)]
 pub struct GCRootsCommand {
+    /// Present the long, verbose form
+    #[clap(short, long)]
+    long: bool,
+
     /// Only print the paths
     #[clap(long)]
     paths: bool,
@@ -32,6 +36,10 @@ pub struct GCRootsCommand {
     #[clap(long)]
     include_missing: bool,
 
+    /// Include gc roots from running processes
+    #[clap(long)]
+    include_proc: bool,
+
     /// Exclude gc roots, whose store path is not accessible
     #[clap(short, long)]
     exclude_inaccessible: bool,
@@ -46,15 +54,15 @@ pub struct GCRootsCommand {
     #[clap(long)]
     no_size: bool,
 
-    /// Present the long, verbose form
-    #[clap(short, long)]
-    long: bool,
+    /// Query Nix for gc roots instead of enumerating the directory
+    #[clap(long)]
+    query_nix: bool,
 }
 
 impl super::Command for GCRootsCommand {
     fn run(self) -> Result<(), String> {
         let print_size = !(self.no_size || self.paths);
-        let mut roots = GCRoot::all(self.include_missing)?;
+        let mut roots = GCRoot::all(self.query_nix, self.include_proc, self.include_missing)?;
         let nroots_total = roots.len();
         roots.par_sort_by_key(|r| r.link().clone());
         roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));

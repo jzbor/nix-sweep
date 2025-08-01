@@ -46,7 +46,7 @@ pub struct TidyupGCRootsCommand {
 
 impl super::Command for TidyupGCRootsCommand {
     fn run(self) -> Result<(), String> {
-        let mut roots = GCRoot::all(self.include_missing)?;
+        let mut roots = GCRoot::all(false, false, self.include_missing)?;
         let print_size = !(self.no_size || self.force);
 
         roots.par_sort_by_key(|r| r.link().clone());
