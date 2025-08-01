@@ -29,7 +29,11 @@ pub struct GCCommand {
     #[clap(short, long)]
     dry_run: bool,
 
+    /// Collect just as much garbage as to match --bigger or --quota
     ///
+    /// The desired target size of the store is calculated based on --bigger or --quota and then
+    /// rewritten to match the --max-freed option of nix-store(1). Garbage collection is then
+    /// performed stopping, as soon as the desired target size is met.
     #[clap(short, long)]
     modest: bool,
 }
