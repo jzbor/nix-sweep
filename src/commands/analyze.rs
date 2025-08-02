@@ -47,12 +47,13 @@ pub struct AnalyzeCommand {
 
 struct StoreAnalysis {
     nstore_paths: usize,
+    ndrv_paths: usize,
     store_size_naive: u64,
     store_size_hl: u64,
+    drv_size: u64,
     journal_size: Option<u64>,
     blkdev_info: Option<(String, u64)>,
     dead_info: Option<(usize, u64)>,
-    drv_info: Option<(usize, u64)>,
     drv_closure_info: Option<(usize, u64)>,
 }
 
@@ -73,13 +74,14 @@ impl StoreAnalysis {
         let store_paths = Store::all_paths()?;
         let nstore_paths = store_paths.len();
         let drv_paths: Vec<_> = store_paths.into_iter().filter(StorePath::is_drv).collect();
+        let ndrv_paths = drv_paths.len();
 
         let mut store_size_naive = 0;
         let mut store_size_hl = 0;
+        let mut drv_size = 0;
         let mut journal_size = None;
         let mut dead_info = None;
         let mut drv_closure_info = None;
-        let mut drv_info = None;
 
         rayon::scope(|s| {
             s.spawn(|_| {
@@ -97,6 +99,8 @@ impl StoreAnalysis {
             });
 
             s.spawn(|_| {
+                let paths: Vec<_> = drv_paths.iter().map(|sp| sp.path().clone()).collect();
+                drv_size = files::dir_size_considering_hardlinks_all(&paths);
             });
 
             if derivations {
@@ -107,10 +111,6 @@ impl StoreAnalysis {
                     let paths: Vec<_> = drv_closure.iter().map(|sp| sp.path().clone()).collect();
                     let drv_closure_size = files::dir_size_considering_hardlinks_all(&paths);
                     drv_closure_info = Some((ndrv_closure, drv_closure_size));
-
-                    let paths: Vec<_> = drv_paths.iter().map(|sp| sp.path().clone()).collect();
-                    let drv_size = files::dir_size_considering_hardlinks_all(&paths);
-                    drv_info = Some((drv_paths.len(), drv_size));
                 });
             }
 
@@ -129,8 +129,8 @@ impl StoreAnalysis {
 
         Ok(StoreAnalysis {
             nstore_paths, store_size_naive, store_size_hl,
-            drv_info, drv_closure_info,
-            blkdev_info, dead_info,
+            ndrv_paths, drv_size,
+            blkdev_info, drv_closure_info, dead_info,
             journal_size,
         })
     }
@@ -163,13 +163,11 @@ impl StoreAnalysis {
 
         println!();
         println!("Number of store paths:           \t{}", self.nstore_paths.to_string().bright_blue());
-        if let Some((ndrv_paths, drv_size)) = self.drv_info {
-            println!("Derivation (.drv) files in store:\t{}\t{} {}",
-                ndrv_paths.to_string().cyan(),
-                FmtSize::new(drv_size).left_pad().cyan(),
-                FmtPercentage::new(drv_size, self.store_size_hl).bracketed().right_pad(),
-            );
-        }
+        println!("Derivation (.drv) files in store:\t{}\t{} {}",
+            self.ndrv_paths.to_string().cyan(),
+            FmtSize::new(self.drv_size).left_pad().cyan(),
+            FmtPercentage::new(self.drv_size, self.store_size_hl).bracketed().right_pad(),
+        );
         if let Some((ndrv_closure, drv_closure_size)) = self.drv_closure_info {
             println!("Closure of .drv files in store:  \t{}\t{} {}",
                 ndrv_closure.to_string().bright_cyan(),
