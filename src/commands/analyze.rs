@@ -31,13 +31,13 @@ pub struct AnalyzeCommand {
     ///
     /// Note that this might slow down the program considerably.
     #[clap(short, long)]
-    garbage: bool,
+    dead: bool,
 
-    /// Print more information about derivations paths
+    /// Print more information about the closures of *.drv paths
     ///
     /// Note that this might slow down the program considerably.
-    #[clap(short, long)]
-    derivations: bool,
+    #[clap(long)]
+    drv_closures: bool,
 
 
     /// Show n gc-roots and profiles
@@ -70,7 +70,7 @@ struct GCRootsAnalysis {
 
 
 impl StoreAnalysis {
-    fn create(journal: bool, dead: bool, derivations: bool) -> Result<Self, String> {
+    fn create(journal: bool, dead: bool, drv_closures: bool) -> Result<Self, String> {
         let store_paths = Store::all_paths()?;
         let nstore_paths = store_paths.len();
         let drv_paths: Vec<_> = store_paths.into_iter().filter(StorePath::is_drv).collect();
@@ -103,7 +103,7 @@ impl StoreAnalysis {
                 drv_size = files::dir_size_considering_hardlinks_all(&paths);
             });
 
-            if derivations {
+            if drv_closures {
                 s.spawn(|_| {
                     let refs: Vec<_> = drv_paths.iter().collect();
                     let drv_closure: Vec<_> = StorePath::full_closure(&refs).into_iter().collect();
@@ -331,7 +331,7 @@ impl super::Command for AnalyzeCommand {
         eprintln!("Indexing store, profiles and gc roots...");
         rayon::scope(|s| {
             s.spawn(|_| {
-                store_analysis = StoreAnalysis::create(!self.no_journal, self.garbage, self.derivations);
+                store_analysis = StoreAnalysis::create(!self.no_journal, self.dead, self.drv_closures);
                 eprintln!("Finished store indexing");
             });
 
