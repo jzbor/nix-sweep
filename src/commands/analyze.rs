@@ -263,7 +263,7 @@ impl ProfileAnalysis {
 
         for (path, profile, size) in &self.profiles {
             let path = path.to_string_lossy().to_string();
-            let path_str = FmtWithEllipsis::fitting_terminal(path, max_path_len, 40)
+            let path_str = FmtWithEllipsis::fitting_terminal(path, max_path_len, 30)
                 .truncate_if(!full_paths)
                 .right_pad();
             let size_str = FmtOrNA::mapped(*size, FmtSize::new)
@@ -273,11 +273,11 @@ impl ProfileAnalysis {
                 .or_empty()
                 .left_pad();
             let generations_str = match profile {
-                Some(profile) => format!("[{} generations]", profile.generations().len()),
+                Some(profile) => format!("[{} gens]", profile.generations().len()),
                 None => "n/a".to_owned(),
             };
 
-            println!("{}  {} {}    {}",
+            println!("{}  {} {} {:>14}",
                 path_str,
                 size_str.yellow(),
                 percentage_str,
