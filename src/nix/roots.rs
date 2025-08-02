@@ -252,16 +252,13 @@ impl GCRoot {
             (self.is_profile(), "profile"),
             (self.is_current(), "current"),
             (self.is_proc(), "process"),
+            (self.is_independent(), "independent"),
         ].iter()
             .map(|(b, n)| if *b { n.to_string() } else { String::new() })
             .filter(|s| !s.is_empty())
             .collect();
 
-        let attributes = if attribute_items.is_empty() {
-            "(other)".to_owned()
-        } else {
-            format!("({})", attribute_items.join(", "))
-        };
+        let attributes = format!("({})", attribute_items.join(", "));
 
         let age_str = self.age()
             .ok()
