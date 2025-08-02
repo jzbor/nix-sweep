@@ -139,6 +139,10 @@ impl StoreAnalysis {
         cmp::min(self.store_size_naive, self.store_size_hl)
     }
 
+    fn hardlinking_savings(&self) -> u64 {
+        self.store_size_naive - self.store_size_hl
+    }
+
     fn report(&self) -> Result<(), String> {
         announce("System:".to_owned());
 
@@ -161,30 +165,64 @@ impl StoreAnalysis {
             }
         }
 
+        let mut max_metric_len = 0;
+        max_metric_len = cmp::max(max_metric_len, self.nstore_paths.to_string().len());
+        max_metric_len = cmp::max(max_metric_len, self.ndrv_paths.to_string().len());
+        if let Some((ndrv_closure, _)) = self.drv_closure_info {
+            max_metric_len = cmp::max(max_metric_len, ndrv_closure.to_string().len());
+        }
+        if let Some((ndead, _)) = self.drv_closure_info {
+            max_metric_len = cmp::max(max_metric_len, ndead.to_string().len());
+        }
+        if self.store_size_naive > self.store_size_hl {
+            max_metric_len = cmp::max(max_metric_len, FmtSize::new(self.hardlinking_savings()).to_string().len());
+        }
+
+        let max_desc_len = 34;
+
         println!();
-        println!("Number of store paths:           \t{}", self.nstore_paths.to_string().bright_blue());
-        println!("Derivation (.drv) files in store:\t{}\t{} {}",
+        println!("{:<desc_width$}  {:>metric_width$}",
+            "Number of store paths:",
+            self.nstore_paths.to_string().bright_blue(),
+            desc_width = max_desc_len,
+            metric_width = max_metric_len,
+        );
+        println!("{:<desc_width$}  {:>metric_width$}\t{} {}",
+            "Derivation files (*.drv) in store:",
             self.ndrv_paths.to_string().cyan(),
             FmtSize::new(self.drv_size).left_pad().cyan(),
-            FmtPercentage::new(self.drv_size, self.store_size_hl).bracketed().right_pad(),
+            FmtPercentage::new(self.drv_size, self.store_size_hl).bracketed().left_pad().cyan(),
+            desc_width = max_desc_len,
+            metric_width = max_metric_len,
         );
         if let Some((ndrv_closure, drv_closure_size)) = self.drv_closure_info {
-            println!("Closure of .drv files in store:  \t{}\t{} {}",
+            println!("{:<desc_width$}  {:>metric_width$}\t{} {}",
+                "Closure of *.drv files in store:",
                 ndrv_closure.to_string().bright_cyan(),
                 FmtSize::new(drv_closure_size).left_pad().bright_cyan(),
-                FmtPercentage::new(drv_closure_size, self.store_size_hl).bracketed().right_pad(),
+                FmtPercentage::new(drv_closure_size, self.store_size_hl).bracketed().left_pad().bright_cyan(),
+                desc_width = max_desc_len,
+                metric_width = max_metric_len,
             );
         }
         if let Some((ndead, dead_size)) = self.dead_info {
-            println!("Dead paths (collectable garbage):\t{}\t{} {}",
-                ndead.to_string().bright_red(),
-                FmtSize::new(dead_size).left_pad().bright_red(),
-                FmtPercentage::new(dead_size, self.store_size_hl).bracketed().right_pad(),
+            println!("{:<desc_width$}  {:>metric_width$}\t{} {}",
+                "Dead paths (collectable garbage):",
+                ndead.to_string().magenta(),
+                FmtSize::new(dead_size).left_pad().magenta(),
+                FmtPercentage::new(dead_size, self.store_size_hl).bracketed().left_pad().magenta(),
+                desc_width = max_desc_len,
+                metric_width = max_metric_len,
             );
         }
 
         if self.store_size_naive > self.store_size_hl {
-            println!("Hardlinking currently saves:    \t{}", size::Size::from_bytes(self.store_size_naive - self.store_size_hl).to_string().green());
+            println!("{:<desc_width$}  {:>metric_width$}",
+                "Hardlinking currently saves:",
+                FmtSize::new(self.hardlinking_savings()).to_string().green(),
+                desc_width = max_desc_len,
+                metric_width = max_metric_len,
+            );
         }
 
         Ok(())
@@ -233,7 +271,7 @@ impl ProfileAnalysis {
             let percentage_str = FmtOrNA::mapped(*size, |s| FmtPercentage::new(s, store_size)
                 .bracketed())
                 .or_empty()
-                .right_pad();
+                .left_pad();
             let generations_str = match profile {
                 Some(profile) => format!("[{} generations]", profile.generations().len()),
                 None => "n/a".to_owned(),
@@ -294,7 +332,7 @@ impl GCRootsAnalysis {
                 .left_pad();
             let percentage_str = FmtOrNA::mapped(*size, |s| FmtPercentage::new(s, store_size).bracketed())
                 .or_empty()
-                .right_pad();
+                .left_pad();
 
             println!("{}  {} {}",
                 link_str,
@@ -314,7 +352,7 @@ impl GCRootsAnalysis {
         let size_str = FmtSize::new(total_size).to_string();
         let percentage_str = FmtPercentage::new(total_size, store_size)
             .bracketed()
-            .right_pad();
+            .left_pad();
         println!("Total closure size of independent GC Roots:\t{} {}", size_str.yellow(), percentage_str);
 
         Ok(())
