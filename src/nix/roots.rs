@@ -173,18 +173,13 @@ impl GCRoot {
         Ok(paths)
     }
 
-    pub fn closure(&self) -> Result<HashSet<StorePath>, String> {
-        self.store_path.clone().and_then(|sp| sp.closure())
-    }
-
     pub fn closure_size(&self) -> Result<u64, String> {
         self.store_path.clone().map(|sp| sp.closure_size())
     }
 
     pub fn full_closure(roots: &[Self]) -> HashSet<StorePath> {
         let paths: Vec<_> = roots.iter()
-            .map(|sp| sp.store_path())
-            .flatten()
+            .flat_map(|sp| sp.store_path())
             .collect();
         StorePath::full_closure(&paths)
     }

@@ -58,8 +58,7 @@ impl Store {
         let paths: HashSet<_> = String::from_utf8(output.stdout)
             .map_err(|e| e.to_string())?
             .lines()
-            .map(|p| StorePath::new(p.into()))
-            .flatten()
+            .flat_map(|p| StorePath::new(p.into()))
             .collect();
 
         Ok(paths)
@@ -102,7 +101,7 @@ impl Store {
         let mut command = process::Command::new("nix-store");
         command.arg("--gc");
         if let Some(amount) = max_freed {
-            command.args(["--max-freed".to_owned(), format!("{}", amount)]);
+            command.args(["--max-freed".to_owned(), format!("{amount}")]);
         }
         let result = command
             .stdin(process::Stdio::inherit())

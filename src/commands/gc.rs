@@ -95,11 +95,9 @@ impl super::Command for GCCommand {
 
         if self.dry_run {
             eprintln!("\n-> Skipping garbage collection (dry run)");
-        } else {
-            if !self.interactive || ask("\nDo you want to perform garbage collection now?", false) {
-                eprintln!("Starting garbage collector");
-                Store::gc(max_freed)?
-            }
+        } else if !self.interactive || ask("\nDo you want to perform garbage collection now?", false) {
+            eprintln!("Starting garbage collector");
+            Store::gc(max_freed)?
         }
 
         Ok(())
