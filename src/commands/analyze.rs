@@ -353,7 +353,7 @@ impl GCRootsAnalysis {
         let percentage_str = FmtPercentage::new(total_size, store_size)
             .bracketed()
             .left_pad();
-        println!("Total closure size of independent GC Roots:\t{} {}", size_str.yellow(), percentage_str);
+        println!("Total closure size of independent gc roots:\t{} {}", size_str.yellow(), percentage_str);
 
         Ok(())
     }
