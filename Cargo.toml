@@ -1,6 +1,6 @@
 [package]
 name = "nix-sweep"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 description = "Utility to clean up old Nix profile generations and left-over garbage collection roots"
 repository = "https://github.com/jzbor/nix-sweep"
