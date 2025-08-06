@@ -15,6 +15,8 @@ use crate::utils::fmt::*;
 use crate::nix::store::StorePath;
 use crate::HashSet;
 
+use super::store::NIX_STORE;
+
 
 const GC_ROOTS_DIR: &str = "/nix/var/nix/gcroots";
 
@@ -49,17 +51,19 @@ impl GCRoot {
     pub fn all_search_directory(include_missing: bool) -> Result<Vec<Self>, String> {
         let gc_roots_dir = PathBuf::from_str(GC_ROOTS_DIR)
             .map_err(|e| e.to_string())?;
-        let link_locations = find_links(&gc_roots_dir, Vec::new())?;
-        let links: Result<Vec<_>, _> = link_locations.into_iter()
-            .map(fs::read_link)
-            .filter(|r_res| if let Ok(r) = r_res { include_missing || fs::exists(r).unwrap_or(true) } else { true } )
-            .collect();
-
 
         let mut roots = Vec::new();
-        for link_path in links.map_err(|e| e.to_string())? {
-            let new = GCRoot::new(link_path)?;
-            roots.push(new)
+        for location in find_links(&gc_roots_dir, Vec::new())? {
+            let mut link = fs::read_link(&location)
+                .map_err(|e| e.to_string())?;
+            if link.starts_with(NIX_STORE) {
+                link = location;
+            }
+
+            if include_missing || fs::exists(&link).unwrap_or(true) {
+                roots.push(GCRoot::new(link)?);
+            }
+
         }
 
         Ok(roots)
