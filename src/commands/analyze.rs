@@ -1,9 +1,11 @@
 use std::cmp::{self, Reverse};
+use std::io;
 use std::path::PathBuf;
 
 use colored::Colorize;
 use rayon::slice::ParallelSliceMut;
 
+use crate::utils::terminal::terminal_width;
 use crate::utils::{files, journal};
 use crate::utils::fmt::*;
 use crate::utils::interaction::{announce, resolve};
@@ -216,13 +218,22 @@ impl StoreAnalysis {
             );
         }
 
-        if self.store_size_naive > self.store_size_hl {
+        println!();
+        if self.store_size_naive > self.store_size_hl && false{
             println!("{:<desc_width$}  {:>metric_width$}",
                 "Hardlinking currently saves:",
                 FmtSize::new(self.hardlinking_savings()).to_string().green(),
                 desc_width = max_desc_len,
                 metric_width = max_metric_len,
             );
+        } else {
+            let pre = "Note:".yellow();
+            if terminal_width(io::stdout()).unwrap_or(80) <= 80 {
+                println!("{pre} It seems like your Nix store is not optimized. You might be able to save space by running `nix-store --optimise` or setting `auto-optimise-store = true`.");
+            } else {
+                println!("{pre} It seems like your Nix store is not optimized. You might be able to save");
+                println!("space by running `nix-store --optimise` or setting `auto-optimise-store = true`.");
+            }
         }
 
         Ok(())
