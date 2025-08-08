@@ -172,6 +172,12 @@ impl Profile {
         }
     }
 
+    pub fn count_marked(&self) -> usize {
+        self.generations.iter()
+            .filter(|g| g.marked())
+            .count()
+    }
+
     pub fn path(&self) -> PathBuf {
         self.parent.clone().join(&self.name)
     }
@@ -204,7 +210,7 @@ impl Profile {
 
 
     pub fn list_generations(&self, print_size: bool, print_markers: bool) {
-        announce(format!("Listing generations for profile {}", self.path().to_string_lossy()));
+        announce(&format!("Listing generations for profile {}", self.path().to_string_lossy()));
 
         let store_paths: Vec<_> = self.generations().iter()
             .flat_map(|g| g.store_path())
@@ -265,8 +271,6 @@ impl Profile {
                     FmtSize::new(kept_size).to_string().green(), kept_paths.len());
             }
         }
-
-        println!();
     }
 
 

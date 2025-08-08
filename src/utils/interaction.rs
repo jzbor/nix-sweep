@@ -55,6 +55,10 @@ pub fn ack(question: &str) {
     }
 }
 
-pub fn announce(s: String) {
+pub fn announce(s: &str) {
     println!("\n{}", format!("=> {s}").green());
+}
+
+pub fn conclusion(s: &str) {
+    println!("\n-> {}", s);
 }

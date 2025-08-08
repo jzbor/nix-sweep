@@ -146,7 +146,7 @@ impl StoreAnalysis {
     }
 
     fn report(&self) -> Result<(), String> {
-        announce("System:".to_owned());
+        announce("System:");
 
         print!("{:<20} {}", format!("{}:", NIX_STORE), FmtSize::new(self.store_size()).left_pad().yellow());
         if let Some((dev, dev_size)) = &self.blkdev_info {
@@ -219,7 +219,7 @@ impl StoreAnalysis {
         }
 
         println!();
-        if self.store_size_naive > self.store_size_hl && false{
+        if self.store_size_naive > self.store_size_hl {
             println!("{:<desc_width$}  {:>metric_width$}",
                 "Hardlinking currently saves:",
                 FmtSize::new(self.hardlinking_savings()).to_string().green(),
@@ -265,7 +265,7 @@ impl ProfileAnalysis {
     }
 
     fn report(&self, full_paths: bool, store_size: u64) -> Result<(), String> {
-        announce("Profiles:".to_owned());
+        announce("Profiles:");
 
         let max_path_len = self.profiles.iter()
             .map(|(p, _, _)| p.to_string_lossy().len())
@@ -328,7 +328,7 @@ impl GCRootsAnalysis {
     }
 
     fn report(&self, full_paths: bool, store_size: u64) -> Result<(), String> {
-        announce("GC Roots:".to_owned());
+        announce("GC Roots:");
 
         let max_link_len = self.gc_roots.iter()
             .map(|(r, _)| r.link().to_string_lossy().len())

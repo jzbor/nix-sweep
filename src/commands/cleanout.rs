@@ -44,23 +44,22 @@ impl super::Command for CleanoutCommand {
             .override_with(&self.cleanout_config);
         let interactive = config.interactive.is_none() || config.interactive == Some(true);
 
-        // println!("{:#?}", config);
-
         for profile_str in self.profiles {
             let mut profile = Profile::from_str(&profile_str)?;
             profile.apply_markers(&config);
 
-            if self.dry_run {
-                profile.list_generations(!self.no_size, true);
-            } else if interactive {
-                profile.list_generations(!self.no_size, true);
+            profile.list_generations(!self.no_size, true);
 
+            if self.dry_run {
+                conclusion("Skipping generation removal (dry run)");
+            } else if profile.count_marked() == 0 {
+                conclusion("Nothing to do");
+            } else if interactive {
                 let confirmation = ask("Do you want to delete the marked generations?", false);
-                println!();
                 if confirmation {
                     remove_generations(&profile);
                 } else {
-                    println!("-> Not touching profile\n");
+                    conclusion("Not touching profile\n");
                 }
             } else {
                 remove_generations(&profile);
@@ -77,7 +76,7 @@ impl super::Command for CleanoutCommand {
 }
 
 fn remove_generations(profile: &Profile) {
-    announce(format!("Removing old generations for profile {}", profile.path().to_string_lossy()));
+    announce(&format!("Removing old generations for profile {}", profile.path().to_string_lossy()));
     for generation in profile.generations() {
         let age_str = FmtAge::new(generation.age()).to_string();
         if generation.marked() {

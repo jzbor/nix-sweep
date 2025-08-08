@@ -74,7 +74,7 @@ impl super::Command for GCRootsCommand {
         let nroots_listed = roots.len();
 
         if !self.tsv && !self.paths {
-            announce(format!("Listing {nroots_listed} gc roots (out of {nroots_total} total)"));
+            announce(&format!("Listing {nroots_listed} gc roots (out of {nroots_total} total)"));
         }
 
         let max_link_len = roots.iter()

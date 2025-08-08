@@ -46,7 +46,7 @@ impl GCCommand {
 
 impl super::Command for GCCommand {
     fn run(self) -> Result<(), String> {
-        announce("Starting garbage collection".to_owned());
+        announce("Starting garbage collection");
         if let Some(bigger) = self.bigger {
             eprintln!("Calculating store size...");
             let size = Store::size()?;

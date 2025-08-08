@@ -50,6 +50,7 @@ impl super::Command for GenerationsCommand {
                 }
             } else {
                 profile.list_generations(!self.no_size, false);
+                println!();
             }
         }
 
