@@ -80,10 +80,10 @@ impl super::Command for TidyupGCRootsCommand {
                         ack("Cannot remove as the path is inaccessible");
                     }
                 } else if self.force || ask("Remove gc root?", false) {
-                    println!("-> Removing gc root '{}'", root.link().to_string_lossy());
                     if let Err(e) =  fs::remove_file(root.link()) {
                         println!("{}", format!("Error: {e}").red());
                     }
+                    println!("-> Removed gc root '{}'", root.link().to_string_lossy());
                 }
             }
         });
