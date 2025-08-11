@@ -50,7 +50,7 @@ impl Command for AddRootCommand {
             Some(n) => gc_parent.join(n),
             None => {
                 let mut count = 0;
-                while fs::exists(gc_parent.join(format!("sweep-{}", count))).map_err(|e| e.to_string())? {
+                while gc_parent.join(format!("sweep-{}", count)).is_symlink() {
                     count += 1;
                 }
                 gc_parent.join(format!("sweep-{}", count))
