@@ -34,6 +34,9 @@ pub struct Args {
 
 #[derive(clap::Subcommand)]
 enum Subcommand {
+    /// Add a new garbage collection root
+    AddRoot(commands::add_root::AddRootCommand),
+
     /// Analyze store usage
     ///
     /// This shows the current size and optimization state of the nix store.
@@ -110,6 +113,7 @@ fn main() {
 
     use Subcommand::*;
     let res = match config.subcommand {
+        AddRoot(cmd) => cmd.run(),
         Analyze(cmd) => cmd.run(),
         Cleanout(cmd) => cmd.run(),
         GC(cmd) => cmd.run(),
