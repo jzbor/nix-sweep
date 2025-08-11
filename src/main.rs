@@ -66,6 +66,7 @@ enum Subcommand {
     PathInfo(commands::path_info::PathInfoCommand),
 
     /// Selectively remove gc roots
+    #[clap(aliases = &["tidyup"])]
     TidyupGCRoots(commands::tidyup_gc_roots::TidyupGCRootsCommand),
 
     /// Export manpage
