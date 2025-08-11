@@ -315,7 +315,8 @@ impl GCRootsAnalysis {
             })
             .collect();
 
-        gc_roots.par_sort_by_key(|(p, _)| p.link().clone());
+        gc_roots.par_sort_by_key(|(r, _)| r.link().clone());
+        gc_roots.dedup_by_key(|(r, _)| r.link().clone());
         gc_roots.par_sort_by_key(|(_, s)| Reverse(*s));
 
         let drained = if !all {

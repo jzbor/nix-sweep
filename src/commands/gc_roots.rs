@@ -67,6 +67,7 @@ impl super::Command for GCRootsCommand {
         let mut roots = GCRoot::all(self.query_nix, self.include_proc, self.include_missing)?;
         let nroots_total = roots.len();
         roots.par_sort_by_key(|r| r.link().clone());
+        roots.dedup_by_key(|r| r.link().clone());
         roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
         roots = GCRoot::filter_roots(roots, self.include_profiles, self.include_current,

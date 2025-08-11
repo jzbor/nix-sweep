@@ -52,6 +52,7 @@ impl super::Command for TidyupGCRootsCommand {
         let print_size = !(self.no_size || self.force);
 
         roots.par_sort_by_key(|r| r.link().clone());
+        roots.dedup_by_key(|r| r.link().clone());
         roots.par_sort_by_key(|r| Reverse(r.age().cloned().unwrap_or(Duration::MAX)));
 
         roots = GCRoot::filter_roots(roots, self.include_profiles, self.include_current,
