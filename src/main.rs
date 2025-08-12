@@ -50,7 +50,10 @@ enum Subcommand {
     /// (e.g. --keep-max, --remove-older).
     /// Passing 0 on any cleanout criterion will reset it to the default behavior.
     ///
-    /// The latest generation as well as the currently active one will not be removed.
+    /// The latest generation as well as the currently active one will not be removed, even if the
+    /// match the specified criteria. If you want to delete those generations or the entire
+    /// profile, you will have to do so manually. Please beware of the risks of this operation and
+    /// the impact it may have on your system state..
     Cleanout(commands::cleanout::CleanoutCommand),
 
     /// Run garbage collection (short for `nix-store --gc`)
