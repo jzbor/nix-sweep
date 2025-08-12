@@ -72,6 +72,10 @@ enum Subcommand {
     #[clap(aliases = &["tidyup"])]
     TidyupGCRoots(commands::tidyup_gc_roots::TidyupGCRootsCommand),
 
+    /// Export shell completions
+    #[clap(hide(true))]
+    Completions(commands::completions::CompletionsCommand),
+
     /// Export manpage
     #[clap(hide(true))]
     Man(commands::man::ManCommand),
@@ -120,6 +124,7 @@ fn main() {
         AddRoot(cmd) => cmd.run(),
         Analyze(cmd) => cmd.run(),
         Cleanout(cmd) => cmd.run(),
+        Completions(cmd) => cmd.run(),
         GC(cmd) => cmd.run(),
         GCRoots(cmd) => cmd.run(),
         Generations(cmd) => cmd.run(),

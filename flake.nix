@@ -29,9 +29,15 @@
           --set PATH ${pkgs.lib.makeBinPath [ pkgs.nix ]}
       '';
       postInstall = ''
+        echo "Generating man pages"
         mkdir ./manpages
         $out/bin/nix-sweep man ./manpages
         installManPage ./manpages/*
+
+        echo "Generating shell completions"
+        mkdir ./completions
+        $out/bin/nix-sweep completions ./completions
+        installShellCompletion completions/nix-sweep.{bash,fish,zsh}
       '';
     };
 
