@@ -149,6 +149,12 @@
         ++ (if cfg.gcModest then [ "--modest" ] else [])
       );
     };
+
+    timerAttrs = {
+      RandomizedDelaySec = "1h";
+      FixedRandomDelay = true;
+      Persistent = true;
+    };
   in {
     ### NixOS ###
     nixosModules.default = { lib, config, pkgs, ...}:
@@ -167,7 +173,7 @@
             timerConfig = {
               OnCalendar = cfg.interval;
               Unit = "nix-sweep.service";
-            };
+            } // timerAttrs;
           };
 
           "nix-sweep-gc" = lib.mkIf (cfg.gc && cfg.gcInterval != cfg.interval) {
@@ -175,7 +181,7 @@
             timerConfig = {
               OnCalendar = cfg.gcInterval;
               Unit = "nix-sweep-gc.service";
-            };
+            } // timerAttrs;
           };
         };
 
@@ -218,7 +224,7 @@
             Timer = {
               OnCalendar = cfg.interval;
               Unit = "nix-sweep.service";
-            };
+            } // timerAttrs;
           };
 
           "nix-sweep-gc" = lib.mkIf (cfg.gc && cfg.gcInterval != cfg.interval) {
@@ -226,7 +232,7 @@
             Timer = {
               OnCalendar = cfg.gcInterval;
               Unit = "nix-sweep-gc.service";
-            };
+            } // timerAttrs;
           };
         };
 
