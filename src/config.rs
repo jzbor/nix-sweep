@@ -159,17 +159,15 @@ impl ConfigPreset {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if let (Some(min), Some(max)) = (self.keep_min, self.keep_max) {
-            if min > max {
+        if let (Some(min), Some(max)) = (self.keep_min, self.keep_max)
+            && min > max {
                 return Err("Invalid configuration - keep-min is greater than keep-max".to_owned());
             }
-        }
 
-        if let (Some(newer), Some(older)) = (self.keep_newer, self.remove_older) {
-            if newer > older {
+        if let (Some(newer), Some(older)) = (self.keep_newer, self.remove_older)
+            && newer > older {
                 return Err("Invalid configuration - keep-newer is greater than remove-older".to_owned());
             }
-        }
 
         Ok(())
     }
