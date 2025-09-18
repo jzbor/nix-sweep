@@ -8,6 +8,7 @@ pub mod generations;
 pub mod man;
 pub mod path_info;
 pub mod tidyup_gc_roots;
+pub mod list_presets;
 
 pub trait Command: clap::Args {
     fn run(self) -> Result<(), String>;

@@ -86,8 +86,12 @@ impl ConfigFile {
         let config: Self = toml::from_str(s)
             .map_err(|e| e.to_string())?;
 
-        for preset in config.0.values() {
-            preset.validate()?;
+        for (preset_name, preset_config) in &config.0 {
+            if !preset_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                return Err(format!("Invalid preset name '{preset_name}' - must only contain alphanumeric characters, dashes and underscores"));
+            }
+
+            preset_config.validate()?;
         }
 
         Ok(config)
@@ -124,9 +128,43 @@ impl ConfigFile {
     fn get_preset(&self, s: &str) -> Option<&ConfigPreset> {
         self.0.get(s)
     }
+
+    fn presets(&self) -> &HashMap<String, ConfigPreset> {
+        &self.0
+    }
 }
 
 impl ConfigPreset {
+    pub fn available(custom_config_file: Option<PathBuf>) -> Result<HashMap<String, Vec<&'static str>>, String> {
+        let mut avail: HashMap<String, Vec<_>> = HashMap::default();
+
+        let mut avail_add = |preset: &str, src: &'static str| {
+            if let Some(sources) = avail.get_mut(preset) {
+                sources.push(src);
+            } else {
+                avail.insert(preset.to_owned(), vec!(src));
+            }
+        };
+
+        if let Some(sys) = ConfigFile::get_system_config()? {
+            for preset in sys.presets().keys() {
+                avail_add(preset, "system");
+            }
+        }
+        if let Some(user) = ConfigFile::get_user_config()? {
+            for preset in user.presets().keys() {
+                avail_add(preset, "user");
+            }
+        }
+        if let Some(custom) = custom_config_file.map(|c| ConfigFile::read_config_file(&c)) {
+            for preset in custom?.presets().keys() {
+                avail_add(preset, "custom");
+            }
+        }
+
+        Ok(avail)
+    }
+
     pub fn load(preset_name: &str, custom_config_file: Option<PathBuf>) -> Result<ConfigPreset, String> {
         let system_config = ConfigFile::get_system_config()?;
         let user_config = ConfigFile::get_user_config()?;
