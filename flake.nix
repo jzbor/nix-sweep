@@ -27,6 +27,7 @@
       postFixup = ''
         wrapProgram $out/bin/nix-sweep \
           --set PATH ${pkgs.lib.makeBinPath [ pkgs.nix ]}
+        ln -s $out/bin/nix-sweep $out/bin/lix-sweep
       '';
       postInstall = ''
         echo "Generating man pages"
