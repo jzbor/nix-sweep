@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use clap::Parser;
+use duration_str::HumanFormat;
 use serde::{Deserialize, Serialize};
 
 use crate::HashMap;
@@ -15,7 +16,7 @@ const CONFIG_FILENAME: &str = "presets.toml";
 pub const DEFAULT_PRESET: &str = "default";
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct ConfigFile(HashMap<String, ConfigPreset>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Parser)]
@@ -37,14 +38,14 @@ pub struct ConfigPreset {
     ///
     /// Pass 0 to unset this option.
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
-    #[serde(default, deserialize_with = "duration_str::deserialize_option_duration")]
+    #[serde(default, deserialize_with = "duration_str::deserialize_option_duration", serialize_with = "serialize_option_duration")]
     pub keep_newer: Option<Duration>,
 
     /// Discard all generations older than this many days
     ///
     /// Pass 0 to unset this option.
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
-    #[serde(default, deserialize_with = "duration_str::deserialize_option_duration")]
+    #[serde(default, deserialize_with = "duration_str::deserialize_option_duration", serialize_with = "serialize_option_duration")]
     pub remove_older: Option<Duration>,
 
     /// Remove these specific generations
@@ -135,7 +136,7 @@ impl ConfigFile {
 }
 
 impl ConfigPreset {
-    pub fn available(custom_config_file: Option<PathBuf>) -> Result<HashMap<String, Vec<&'static str>>, String> {
+    pub fn available(custom_config_file: Option<&PathBuf>) -> Result<HashMap<String, Vec<&'static str>>, String> {
         let mut avail: HashMap<String, Vec<_>> = HashMap::default();
 
         let mut avail_add = |preset: &str, src: &'static str| {
@@ -165,7 +166,7 @@ impl ConfigPreset {
         Ok(avail)
     }
 
-    pub fn load(preset_name: &str, custom_config_file: Option<PathBuf>) -> Result<ConfigPreset, String> {
+    pub fn load(preset_name: &str, custom_config_file: Option<&PathBuf>) -> Result<ConfigPreset, String> {
         let system_config = ConfigFile::get_system_config()?;
         let user_config = ConfigFile::get_user_config()?;
         let custom_config = match custom_config_file {
@@ -194,6 +195,38 @@ impl ConfigPreset {
             .finalize();
 
         Ok(preset)
+    }
+
+    pub fn load_all(custom_config_file: Option<&PathBuf>) -> Result<HashMap<String, ConfigPreset>, String> {
+        let system_config = ConfigFile::get_system_config()?;
+        let user_config = ConfigFile::get_user_config()?;
+        let custom_config = match custom_config_file {
+            Some(path) => Some(ConfigFile::read_config_file(&path)?),
+            None => None,
+        };
+
+        let mut final_config: HashMap<String, ConfigPreset> = HashMap::default();
+
+        for config_opt in [system_config, user_config, custom_config] {
+            let config = match config_opt {
+                Some(c) => c,
+                None => continue,
+            };
+
+            for (preset_name, preset_config) in config.0 {
+                if let Some(prev) = final_config.get_mut(&preset_name) {
+                    *prev = prev.override_with(&preset_config);
+                } else {
+                    final_config.insert(preset_name, preset_config);
+                }
+            }
+        }
+
+        for preset_config in final_config.values_mut() {
+            *preset_config = preset_config.finalize()
+        }
+
+        Ok(final_config)
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -337,3 +370,16 @@ impl Default for ConfigPreset {
         }
     }
 }
+
+
+fn serialize_option_duration<S>(d: &Option<Duration>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match d {
+        Some(d) => s.serialize_some(&d.human_format()),
+        None => s.serialize_none(),
+    }
+
+}
+

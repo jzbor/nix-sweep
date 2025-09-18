@@ -4,7 +4,6 @@ use std::{env, thread};
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
 
-use crate::commands::list_presets::ListPresetsCommand;
 use crate::commands::Command;
 use crate::utils::interaction::resolve;
 
@@ -66,11 +65,11 @@ enum Subcommand {
     /// List profile generations
     Generations(commands::generations::GenerationsCommand),
 
-    /// List available presets for `cleanout`
-    ListPresets(commands::list_presets::ListPresetsCommand),
-
     /// Show information on a path or a symlink to a path
     PathInfo(commands::path_info::PathInfoCommand),
+
+    /// Show information about available presets for `cleanout`
+    Presets(commands::presets::PresetsCommand),
 
     /// Selectively remove gc roots
     #[clap(aliases = &["tidyup"])]
@@ -135,7 +134,7 @@ fn main() {
         Man(cmd) => cmd.run(),
         PathInfo(cmd) => cmd.run(),
         TidyupGCRoots(cmd) => cmd.run(),
-        ListPresets(cmd) => cmd.run(),
+        Presets(cmd) => cmd.run(),
     };
     resolve(res);
 }

@@ -40,7 +40,7 @@ pub struct CleanoutCommand {
 impl super::Command for CleanoutCommand {
     fn run(self) -> Result<(), String> {
         self.cleanout_config.validate()?;
-        let config = ConfigPreset::load(&self.preset, self.config)?
+        let config = ConfigPreset::load(&self.preset, self.config.as_ref())?
             .override_with(&self.cleanout_config);
         let interactive = config.interactive.is_none() || config.interactive == Some(true);
 
