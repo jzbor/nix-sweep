@@ -1,5 +1,5 @@
 {
-  description = "Cleanup old nix generations";
+  description = "Utility to clean up old Nix profile generations and left-over garbage collection roots";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

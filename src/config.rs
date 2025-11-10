@@ -157,7 +157,7 @@ impl ConfigPreset {
                 avail_add(preset, "user");
             }
         }
-        if let Some(custom) = custom_config_file.map(|c| ConfigFile::read_config_file(&c)) {
+        if let Some(custom) = custom_config_file.map(ConfigFile::read_config_file) {
             for preset in custom?.presets().keys() {
                 avail_add(preset, "custom");
             }
@@ -170,7 +170,7 @@ impl ConfigPreset {
         let system_config = ConfigFile::get_system_config()?;
         let user_config = ConfigFile::get_user_config()?;
         let custom_config = match custom_config_file {
-            Some(path) => Some(ConfigFile::read_config_file(&path)?),
+            Some(path) => Some(ConfigFile::read_config_file(path)?),
             None => None,
         };
 
@@ -201,7 +201,7 @@ impl ConfigPreset {
         let system_config = ConfigFile::get_system_config()?;
         let user_config = ConfigFile::get_user_config()?;
         let custom_config = match custom_config_file {
-            Some(path) => Some(ConfigFile::read_config_file(&path)?),
+            Some(path) => Some(ConfigFile::read_config_file(path)?),
             None => None,
         };
 
