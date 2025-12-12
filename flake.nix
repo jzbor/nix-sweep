@@ -54,7 +54,7 @@
 
       package = lib.mkOption {
         type = lib.types.package;
-        inherit (self.packages.${pkgs.system}) default;
+        inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) default;
         description = "nix-sweep package to use for the service";
       };
 
