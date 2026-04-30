@@ -219,11 +219,6 @@
       };
 
       config = lib.mkIf cfg.enable {
-        assertions = [
-          (lib.hm.darwin.assertInterval "services.nix-sweep.interval" cfg.interval pkgs)
-          (lib.hm.darwin.assertInterval "services.nix-sweep.gcInterval" cfg.gcInterval pkgs)
-        ];
-
         systemd.user.timers = {
           "nix-sweep" = {
             Install.WantedBy = [ "timers.target" ];
@@ -255,41 +250,6 @@
             Type = "oneshot";
           };
         };
-        launchd.agents = let
-          scripts = mkServiceScripts { inherit lib cfg; };
-        in {
-          nix-sweep = {
-            enable = true;
-            config = {
-              Label = "org.nix-community.home.nix-sweep";
-              ProgramArguments = [
-                "/bin/sh"
-                "-lc"
-                scripts.nix-sweep
-              ];
-              ProcessType = "Background";
-              RunAtLoad = false;
-              StartCalendarInterval = lib.hm.darwin.mkCalendarInterval cfg.interval;
-              StandardOutPath = "${logDir}/launchd-stdout.log";
-              StandardErrorPath = "${logDir}/launchd-stderr.log";
-            };
-          };
-          nix-sweep-gc = lib.mkIf (cfg.gc && cfg.gcInterval != cfg.interval) {
-            enable = true;
-            config = {
-              Label = "org.nix-community.home.nix-sweep-gc";
-              ProgramArguments = [
-                "/bin/sh"
-                "-lc"
-                scripts.nix-sweep-gc
-              ];
-              ProcessType = "Background";
-              RunAtLoad = false;
-              StartCalendarInterval = lib.hm.darwin.mkCalendarInterval cfg.gcInterval;
-              StandardOutPath = "${logDir}/gc-launchd-stdout.log";
-              StandardErrorPath = "${logDir}/gc-launchd-stderr.log";
-            };
-          };
       };
     };
   });
