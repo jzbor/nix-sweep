@@ -34,14 +34,18 @@ pub struct ConfigPreset {
     #[clap(long)]
     pub keep_max: Option<usize>,
 
-    /// Keep all generations newer than this many days
+    /// Keep all generations newer than this age (in the form `<int><suffix>`)
+    ///
+    /// Valid suffixes are "y", "mon", "w", "d", "h", "m", "s".
     ///
     /// Pass 0 to unset this option.
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
     #[serde(default, deserialize_with = "duration_str::deserialize_option_duration", serialize_with = "serialize_option_duration")]
     pub keep_newer: Option<Duration>,
 
-    /// Discard all generations older than this many days
+    /// Discard all generations older than this age (in the form `<int><suffix>`)
+    ///
+    /// Valid suffixes are "y", "mon", "w", "d", "h", "m", "s".
     ///
     /// Pass 0 to unset this option.
     #[clap(long, value_parser = |s: &str| duration_str::parse_std(s))]
