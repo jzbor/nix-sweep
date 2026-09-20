@@ -13,6 +13,7 @@ use crate::HashSet;
 pub const NIX_STORE: &str = "/nix/store";
 const CLOSURE_LOOKUP_CHUNK_SIZE: usize = 1024;
 static CLOSURE_CACHE: Cache<u64, HashSet<StorePath>> = Cache::new();
+static REFERENCES_CACHE: Cache<u64, HashSet<StorePath>> = Cache::new();
 
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
@@ -237,5 +238,45 @@ impl StorePath {
             .flatten()
             .collect()
     }
+
+    pub fn references(&self) -> Result<HashSet<StorePath>, String> {
+        let key_hash = {
+            let mut hasher = crate::Hasher::default();
+            Hash::hash(self, &mut hasher);
+            hasher.finish()
+        };
+        if let Some(closure) = REFERENCES_CACHE.lookup(&key_hash) {
+            return Ok(closure);
+        }
+
+        let output = process::Command::new("nix-store")
+            .arg("--query")
+            .arg("--references")
+            .arg(self.path().to_string_lossy().as_ref())
+            .stdin(process::Stdio::inherit())
+            .stderr(process::Stdio::inherit())
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            match output.status.code() {
+                Some(code) => return Err(format!("`nix-store` failed (exit code {code})")),
+                None => return Err("`nix-store` failed".to_string()),
+            }
+        }
+
+        let references: HashSet<_> = String::from_utf8(output.stdout)
+            .map_err(|e| e.to_string())?
+            .lines()
+            .map(PathBuf::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+            .map(|i| i.into_iter().map(StorePath).filter(|p| p != self).collect())?;
+
+        REFERENCES_CACHE.insert(key_hash, references.clone());
+
+        Ok(references)
+    }
+
 
 }
